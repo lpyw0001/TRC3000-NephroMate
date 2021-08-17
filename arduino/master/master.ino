@@ -32,6 +32,12 @@ int mixerStartPin = 11;
 int deaeratorStartPin = 12;
 int heaterStartPin = 13;
 
+// From Slave 1
+double venTempVal_S1 = 0;
+double venPressVal_S1 = 0;
+double wastePressVal_S1 = 0;
+double wasteLevelVal_S1 = 0;
+
 // ----------- //
 // SETUP LOOP  //
 // ----------- //
@@ -60,25 +66,42 @@ void setup() {
 // Wire.endTransmission()
 
 void loop() {
-  // Request IO from slave 0x02
-  Wire.requestFrom(2,** TO DO **); 
+  // Request IO from slave 0x01 (4 x analogue values)
+  Wire.requestFrom(0x01,16); 
   while(Wire.available()){
+    // ** NEEDS TESTING **
+    ((byte *)&venTempVal_S1)[0]=Wire.read(); // Wire.read reads one byte (double = 4 bytes)
+    ((byte *)&venTempVal_S1)[1]=Wire.read();
+    ((byte *)&venTempVal_S1)[2]=Wire.read();
+    ((byte *)&venTempVal_S1)[3]=Wire.read();
+    ((byte *)&venPressVal_S1)[0]=Wire.read();
+    ((byte *)&venPressVal_S1)[1]=Wire.read();
+    ((byte *)&venPressVal_S1)[2]=Wire.read();
+    ((byte *)&venPressVal_S1)[3]=Wire.read();
+    ((byte *)&wastePressVal_S1)[0]=Wire.read();
+    ((byte *)&wastePressVal_S1)[1]=Wire.read();
+    ((byte *)&wastePressVal_S1)[2]=Wire.read();
+    ((byte *)&wastePressVal_S1)[3]=Wire.read();
+    ((byte *)&wasteLevelVal_S1)[0]=Wire.read();
+    ((byte *)&wasteLevelVal_S1)[1]=Wire.read();
+    ((byte *)&wasteLevelVal_S1)[2]=Wire.read();
+    ((byte *)&wasteLevelVal_S1)[3]=Wire.read();
     // Add actions here
   }
 
-  // Request IO from slave 0x03
-  Wire.requestFrom(3,** TO DO **); 
+  // Request IO from slave 0x02
+  Wire.requestFrom(0x02,** TO DO **); 
   while(Wire.available()){
     // Add actions here
   }
   
-  // Request IO from slave 0x04
-  Wire.requestFrom(4,** TO DO **); 
+  // Request IO from slave 0x03
+  Wire.requestFrom(0x03,** TO DO **); 
   while(Wire.available()){
     // Add actions here
   }
-   // Request IO from slave 0x05
-  Wire.requestFrom(5,** TO DO **);
+   // Request IO from slave 0x04
+  Wire.requestFrom(0x04,** TO DO **);
   while(Wire.available()){
     // Add actions here
   }
