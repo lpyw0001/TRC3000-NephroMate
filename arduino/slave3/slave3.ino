@@ -22,7 +22,7 @@ double hepPumpSpeedVal = 0;
 // SETUP LOOP  //
 // ----------- //
 void setup() {
-  Wire.begin();
+  Wire.begin(0x03); // join I2C bus as slave with address 0x03
   Wire.onRequest(IOSend);
 }
 

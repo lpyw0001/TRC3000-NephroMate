@@ -22,7 +22,7 @@ double dialPressVal = 0;
 // SETUP LOOP  //
 // ----------- //
 void setup() {
-  Wire.begin();
+  Wire.begin(0x02); // join I2C bus as slave with address 0x02
   Wire.onRequest(IOSend);
 }
 

@@ -36,7 +36,7 @@ int heaterStartPin = 13;
 // SETUP LOOP  //
 // ----------- //
 void setup() {
-  Wire.begin();
+  Wire.begin(); // join I2C bus (address optional for master device)
   Serial.begin(9600);
   pinMode(bloodPumpStartPin, OUTPUT);
   pinMode(hepPumpStartPin, OUTPUT);

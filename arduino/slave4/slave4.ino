@@ -20,7 +20,7 @@ double heaterSpeedVal = 0;
 // SETUP LOOP  //
 // ----------- //
 void setup() {
-  Wire.begin();
+  Wire.begin(0x04); // join I2C bus as slave with address 0x04
   Wire.onRequest(IOSend);
 }
 

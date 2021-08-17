@@ -22,7 +22,7 @@ double wasteLevelVal = 0;
 // SETUP LOOP  //
 // ----------- //
 void setup() {
-  Wire.begin();
+  Wire.begin(0x01); // join I2C bus as slave with address 0x01
   Wire.onRequest(IOSend);
 }
 
