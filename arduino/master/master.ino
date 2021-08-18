@@ -1,7 +1,25 @@
 // TRC3000 - NephroMate
 // Master
-
 #include <Wire.h>
+#include <LiquidCrystal.h>
+
+// Source: https://github.com/nickgammon/I2C_Anything/blob/master/I2C_Anything.h
+template <typename T> unsigned int I2C_writeAnything (const T& value)
+{
+  Wire.write((byte *) &value, sizeof (value));
+  return sizeof (value);
+}  // end of I2C_writeAnything
+
+template <typename T> unsigned int I2C_readAnything(T& value)
+{
+  byte * p = (byte*) &value;
+  unsigned int i;
+  for (i = 0; i < sizeof value; i++)
+    *p++ = Wire.read();
+  return i;
+}  // end of I2C_readAnything
+
+// Liquid crystal display code adapted from: http://www.arduino.cc/en/Tutorial/LiquidCrystal
 // ---------------- //
 // GLOBAL VARIABLES //
 // ---------------- //
@@ -17,6 +35,8 @@ double artPressVal = 0;
 double artTempVal = 0;
 double hepLevelVal = 0;
 double inflowPressVal = 0;
+
+double IOBusDouble[4] = {0.0, 0.0, 0.0, 0.0};
 
 // Digital Pins
 int bloodPumpStartPin = 2;
@@ -38,17 +58,14 @@ double venPressVal_S1 = 0;
 double wastePressVal_S1 = 0;
 double wasteLevelVal_S1 = 0;
 
-// From Slave 2
-double dialConductivityVal_S2 = 0;
-double pHVal_S2 = 0;
-double dialTempVal_S2 = 0;
-double dialPressVal_S2 = 0;
+// Setpoints
+/*const double PRESSURE_L_SCL;
+const double PRESSURE_H_SCL;
+const double PRESSURE_H_SP;
+const double PRESSURE_L_SP;*/
 
-// From Slave 3
-double dialLevelVal_S3 = 0;
-double waterLevelVal_S3 = 0;
-double bloodPumpSpeedVal_S3 = 0;
-double hepPumpSpeedVal_S3 = 0;
+// Initialise LCD
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 
 // ----------- //
 // SETUP LOOP  //
@@ -68,6 +85,7 @@ void setup() {
   pinMode(mixerStartPin, OUTPUT);
   pinMode(deaeratorStartPin, OUTPUT);
   pinMode(heaterStartPin, OUTPUT);
+  lcd.begin(16, 2);
 }
 
 // ---------- //
@@ -78,39 +96,65 @@ void setup() {
 // Wire.endTransmission()
 
 void loop() {
+
+  // Read Analogue Inputs
+  artPressVal = analogRead(artPressPin);
+  artTempVal = analogRead(artTempPin);
+  hepLevelVal = analogRead(hepLevelPin);
+  inflowPressVal = analogRead(inflowPressPin);
+  displayUpdate();
+
+  Wire.requestFrom(0x10,4);
+  I2C_readAnything(venTempVal_S1); // NOT WORKING
+  /*I2C_readAnything(venPressVal_S1);
+  I2C_readAnything(wastePressVal_S1);
+  I2C_readAnything(wasteLevelVal_S1);*/
+
   // Request IO from slave 0x01 (4 x analogue values)
-  Wire.requestFrom(0x01,16); 
-  while(Wire.available()){ // change from while loop to if statement?
-    // ** NEEDS TESTING **
-    ((byte *)&venTempVal_S1)[0]=Wire.read(); // Wire.read reads one byte (double = 4 bytes)
-    ((byte *)&venTempVal_S1)[1]=Wire.read();
-    ((byte *)&venTempVal_S1)[2]=Wire.read();
-    ((byte *)&venTempVal_S1)[3]=Wire.read();
-    ((byte *)&venPressVal_S1)[0]=Wire.read();
-    ((byte *)&venPressVal_S1)[1]=Wire.read();
-    ((byte *)&venPressVal_S1)[2]=Wire.read();
-    ((byte *)&venPressVal_S1)[3]=Wire.read();
-    ((byte *)&wastePressVal_S1)[0]=Wire.read();
-    ((byte *)&wastePressVal_S1)[1]=Wire.read();
-    ((byte *)&wastePressVal_S1)[2]=Wire.read();
-    ((byte *)&wastePressVal_S1)[3]=Wire.read();
-    ((byte *)&wasteLevelVal_S1)[0]=Wire.read();
-    ((byte *)&wasteLevelVal_S1)[1]=Wire.read();
-    ((byte *)&wasteLevelVal_S1)[2]=Wire.read();
-    ((byte *)&wasteLevelVal_S1)[3]=Wire.read();
-    // Add actions here
-  }
+  /*Wire.requestFrom(0x01,16);
+    I2C_readAnything(venTempVal_S1);
+    I2C_readAnything(venPressVal_S1);
+    I2C_readAnything(wastePressVal_S1);
+    I2C_readAnything(wasteLevelVal_S1);
 
-  // Request IO from slave 0x02
-  Wire.requestFrom(0x02,** TO DO **); 
-  while(Wire.available()){
-    // Add actions here
-  }
-  
-  // Request IO from slave 0x03
-  Wire.requestFrom(0x03,** TO DO **); 
-  while(Wire.available()){
-    // Add actions here
-  }
+    //Scale Values
 
+    // Request IO from slave 0x02
+    Wire.requestFrom(0x02,** TO DO **);
+    while(Wire.available()){
+    // Add actions here
+    }
+
+    // Request IO from slave 0x03
+    Wire.requestFrom(0x03,** TO DO **);
+    while(Wire.available()){
+    // Add actions here
+    }
+    // Request IO from slave 0x04
+    Wire.requestFrom(0x04,** TO DO **);
+    while(Wire.available()){
+    // Add actions here
+    }*/
+}
+
+// -------------- //
+// Update Screen  //
+// ------------- //
+void displayUpdate() {
+  lcd.setCursor(0, 0);
+  lcd.print("Art Press: ");
+  lcd.print(artPressVal);
+  lcd.setCursor(0, 1);
+  lcd.print("Art Temp:  ");
+  lcd.print(artTempVal);
+
+  delay(100);
+
+  lcd.setCursor(0, 0);
+  lcd.print("Hep Level:  ");
+  lcd.print(hepLevelVal);
+  lcd.setCursor(0, 1);
+  lcd.print("Infl Press: ");
+  lcd.print(inflowPressVal);
+  delay(100);
 }
