@@ -112,9 +112,5 @@ void loop() {
   while(Wire.available()){
     // Add actions here
   }
-   // Request IO from slave 0x04
-  Wire.requestFrom(0x04,** TO DO **);
-  while(Wire.available()){
-    // Add actions here
-  }
+
 }
