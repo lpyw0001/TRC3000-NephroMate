@@ -1,7 +1,6 @@
 // TRC3000 - NephroMate
 // Slave 4
 
-#include <Wire.h>
 // ---------------- //
 // GLOBAL VARIABLES //
 // ---------------- //
@@ -20,8 +19,7 @@ double heaterSpeedVal = 0;
 // SETUP LOOP  //
 // ----------- //
 void setup() {
-  Wire.begin(0x04); // join I2C bus as slave with address 0x04
-  Wire.onRequest(IOSend);
+
 }
 
 // ---------- //
@@ -35,6 +33,3 @@ void loop() {
 // ---------- //
 // FUNCTIONS  //
 // ---------- //
-void IOSend(){
-  Wire.write(** TO DO **);
-}

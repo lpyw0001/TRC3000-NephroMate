@@ -50,11 +50,6 @@ double waterLevelVal_S3 = 0;
 double bloodPumpSpeedVal_S3 = 0;
 double hepPumpSpeedVal_S3 = 0;
 
-// From Slave 4
-double mixerSpeedVal_S4 = 0;
-double deaeratorSpeedVal_S4 = 0;
-double heaterSpeedVal_S4 = 0;
-
 // ----------- //
 // SETUP LOOP  //
 // ----------- //
