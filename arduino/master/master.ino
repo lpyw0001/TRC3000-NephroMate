@@ -38,6 +38,23 @@ double venPressVal_S1 = 0;
 double wastePressVal_S1 = 0;
 double wasteLevelVal_S1 = 0;
 
+// From Slave 2
+double dialConductivityVal_S2 = 0;
+double pHVal_S2 = 0;
+double dialTempVal_S2 = 0;
+double dialPressVal_S2 = 0;
+
+// From Slave 3
+double dialLevelVal_S3 = 0;
+double waterLevelVal_S3 = 0;
+double bloodPumpSpeedVal_S3 = 0;
+double hepPumpSpeedVal_S3 = 0;
+
+// From Slave 4
+double mixerSpeedVal_S4 = 0;
+double deaeratorSpeedVal_S4 = 0;
+double heaterSpeedVal_S4 = 0;
+
 // ----------- //
 // SETUP LOOP  //
 // ----------- //
@@ -68,7 +85,7 @@ void setup() {
 void loop() {
   // Request IO from slave 0x01 (4 x analogue values)
   Wire.requestFrom(0x01,16); 
-  while(Wire.available()){
+  while(Wire.available()){ // change from while loop to if statement?
     // ** NEEDS TESTING **
     ((byte *)&venTempVal_S1)[0]=Wire.read(); // Wire.read reads one byte (double = 4 bytes)
     ((byte *)&venTempVal_S1)[1]=Wire.read();
