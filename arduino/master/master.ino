@@ -36,36 +36,36 @@ double artTempVal = 0;
 double hepLevelVal = 0;
 double inflowPressVal = 0;
 
-double IOBusDouble[4] = {0.0, 0.0, 0.0, 0.0};
-
 // Digital Pins
-int bloodPumpStartPin = 2;
-int hepPumpStartPin = 3;
-int dialPumpStartPin = 4;
-int venClampActivePin = 5;
-int airDetectTXPin = 6;
-int airDetectRXPin = 7;
-int dialClampActivePin = 8;
-int bloodLeakPin = 9;
-int wastePumpStartPin = 10;
-int mixerStartPin = 11;
-int deaeratorStartPin = 12;
-int heaterStartPin = 13;
+int alarmLEDPin = 0;
+int alarmBuzzerPin = 1;
+int bloodPumpStartPin = 6;
+int hepPumpStartPin = 7;
+int dialPumpStartPin = 8;
+int venClampActivePin = 9;
+int mixerStartPin = 10;
+int deaeratorStartPin = 13;
 
 // From Slave 1
-double venTempVal_S1 = 0;
-double venPressVal_S1 = 0;
-double wastePressVal_S1 = 0;
-double wasteLevelVal_S1 = 0;
+double venTempVal_S1;
+double venPressVal_S1;
+double wastePressVal_S1;
+double wasteLevelVal_S1;
 
 // Setpoints
 /*const double PRESSURE_L_SCL;
-const double PRESSURE_H_SCL;
-const double PRESSURE_H_SP;
-const double PRESSURE_L_SP;*/
+  const double PRESSURE_H_SCL;*/
+const double PRESSURE_HIGH = 500; // update value
+const double PRESSURE_LOW = 20; // update value
+bool alarmState = false;
 
 // Initialise LCD
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+unsigned long currentTime;
+unsigned long prevTime;
+unsigned long cyclePeriod = 300; // time in ms to alternate the screen values
+bool cycle = true;
+bool firstLoop = true;
 
 // ----------- //
 // SETUP LOOP  //
@@ -73,28 +73,20 @@ LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 void setup() {
   Wire.begin(); // join I2C bus (address optional for master device)
   Serial.begin(9600);
+  pinMode(alarmLEDPin, OUTPUT);
+  pinMode(alarmBuzzerPin, OUTPUT);
   pinMode(bloodPumpStartPin, OUTPUT);
   pinMode(hepPumpStartPin, OUTPUT);
   pinMode(dialPumpStartPin, OUTPUT);
   pinMode(venClampActivePin, OUTPUT);
-  pinMode(airDetectTXPin, OUTPUT);
-  pinMode(airDetectRXPin, INPUT);
-  pinMode(dialClampActivePin, OUTPUT);
-  pinMode(bloodLeakPin, INPUT);
-  pinMode(wastePumpStartPin, OUTPUT);
   pinMode(mixerStartPin, OUTPUT);
   pinMode(deaeratorStartPin, OUTPUT);
-  pinMode(heaterStartPin, OUTPUT);
   lcd.begin(16, 2);
 }
 
 // ---------- //
 // MAIN LOOP  //
 // ---------- //
-// Wire.beginTransmission()
-// Wire.write()
-// Wire.endTransmission()
-
 void loop() {
 
   // Read Analogue Inputs
@@ -102,13 +94,39 @@ void loop() {
   artTempVal = analogRead(artTempPin);
   hepLevelVal = analogRead(hepLevelPin);
   inflowPressVal = analogRead(inflowPressPin);
-  displayUpdate();
 
-  Wire.requestFrom(0x10,4);
-  I2C_readAnything(venTempVal_S1); // NOT WORKING
-  /*I2C_readAnything(venPressVal_S1);
+  alarmState = (artPressVal > PRESSURE_HIGH or artPressVal < PRESSURE_LOW);
+
+  if (alarmState) {
+    digitalWrite(alarmLEDPin, HIGH);
+    digitalWrite(alarmBuzzerPin, HIGH);
+  }
+  else {
+    digitalWrite(alarmLEDPin, LOW);
+    digitalWrite(alarmBuzzerPin, LOW);
+  }
+
+  if (firstLoop) {
+    displayUpdate("Art Press: ", artPressVal, "Art Temp:  ", artTempVal);
+    firstLoop = false;
+  }
+  // Update Display
+  currentTime = millis();
+  if (currentTime - prevTime > cyclePeriod) {
+    if (cycle) {
+      displayUpdate("Art Press: ", artPressVal, "Art Temp:  ", artTempVal);
+    } else {
+      displayUpdate("Hep Level:  ", hepLevelVal, "Infl Press: ", inflowPressVal);
+    }
+    prevTime = currentTime;
+    cycle = !cycle;
+  }
+
+  Wire.requestFrom(0x10, 16);
+  I2C_readAnything(venTempVal_S1);
+  I2C_readAnything(venPressVal_S1);
   I2C_readAnything(wastePressVal_S1);
-  I2C_readAnything(wasteLevelVal_S1);*/
+  I2C_readAnything(wasteLevelVal_S1);
 
   // Request IO from slave 0x01 (4 x analogue values)
   /*Wire.requestFrom(0x01,16);
@@ -140,21 +158,11 @@ void loop() {
 // -------------- //
 // Update Screen  //
 // ------------- //
-void displayUpdate() {
+void displayUpdate(String text1, double value1, String text2, double value2) {
   lcd.setCursor(0, 0);
-  lcd.print("Art Press: ");
-  lcd.print(artPressVal);
+  lcd.print(text1);
+  lcd.print(value1);
   lcd.setCursor(0, 1);
-  lcd.print("Art Temp:  ");
-  lcd.print(artTempVal);
-
-  delay(100);
-
-  lcd.setCursor(0, 0);
-  lcd.print("Hep Level:  ");
-  lcd.print(hepLevelVal);
-  lcd.setCursor(0, 1);
-  lcd.print("Infl Press: ");
-  lcd.print(inflowPressVal);
-  delay(100);
+  lcd.print(text2);
+  lcd.print(value2);
 }

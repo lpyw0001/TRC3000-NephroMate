@@ -40,6 +40,11 @@ double IOBusDouble[4] = {0.0, 0.0, 0.0, 0.0};
 
 // Initialise LCD
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+unsigned long currentTime;
+unsigned long prevTime;
+unsigned long cyclePeriod = 300; // time in ms to alternate the screen values
+bool cycle = true;
+bool firstLoop = true;
 
 // ----------- //
 // SETUP LOOP  //
@@ -60,13 +65,21 @@ void loop() {
   wastePressVal = analogRead(wastePressPin);
   wasteLevelVal = analogRead(wasteLevelPin);
 
-  IOBusDouble[0] = venTempVal;
-  IOBusDouble[1] = venPressVal;
-  IOBusDouble[2] = wastePressVal;
-  IOBusDouble[3] = wasteLevelVal;
-
-  displayUpdate();
-  //delay(100); // Scan for IO changes every 100ms
+  //displayUpdate();
+  if (firstLoop) {
+    displayUpdate("Ven Temp: ", venTempVal, "Ven Press: ", venPressVal);
+    firstLoop = false;
+  }
+  currentTime = millis();
+  if (currentTime - prevTime > cyclePeriod) {
+    if (cycle) {
+      displayUpdate("Ven Temp: ", venTempVal, "Ven Press: ", venPressVal);
+    } else {
+      displayUpdate("Wst Press: ", wastePressVal, "Wst Level: ", wasteLevelVal);
+    }
+    prevTime = currentTime;
+    cycle = !cycle;
+  }
 }
 
 // ---------- //
@@ -74,31 +87,19 @@ void loop() {
 // ---------- //
 // Transmit IO Data when requested by master
 void IOSend() {
-  I2C_writeAnything(venTempVal); // NOT WORKING
-  /*I2C_writeAnything(venPressVal);
+  I2C_writeAnything(venTempVal);
+  I2C_writeAnything(venPressVal);
   I2C_writeAnything(wastePressVal);
-  I2C_writeAnything(wasteLevelVal);*/
-  
-  //I2C_writeAnything(IOBusDouble);
-  
+  I2C_writeAnything(wasteLevelVal);
 }
 
-// Update Screen  
-void displayUpdate() {
-  lcd.setCursor(0, 0);
-  lcd.print("Ven Temp:  ");
-  lcd.print(venTempVal);
-  lcd.setCursor(0, 1);
-  lcd.print("Ven Press: ");
-  lcd.print(venPressVal);
+// Update Screen
 
-  delay(100); // change to non-blocking millis?
-
+void displayUpdate(String text1, double value1, String text2, double value2) {
   lcd.setCursor(0, 0);
-  lcd.print("Waste Press: ");
-  lcd.print(wastePressVal);
+  lcd.print(text1);
+  lcd.print(value1);
   lcd.setCursor(0, 1);
-  lcd.print("Waste Level: ");
-  lcd.print(wasteLevelVal);
-  delay(100);
+  lcd.print(text2);
+  lcd.print(value2);
 }
