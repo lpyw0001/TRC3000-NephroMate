@@ -39,12 +39,12 @@ double inflowPressVal = 0;
 // Digital Pins
 int alarmLEDPin = 0;
 int alarmBuzzerPin = 1;
-int bloodPumpStartPin = 6;
-int hepPumpStartPin = 7;
-int dialPumpStartPin = 8;
-int venClampActivePin = 9;
-int mixerStartPin = 10;
+int startCommandPin = 6;
+int EStopPin = 7;
 int deaeratorStartPin = 13;
+
+bool startCommand = true;
+bool EStop = true;
 
 // From Slave 1
 double venTempVal_S1;
@@ -60,10 +60,10 @@ const double PRESSURE_LOW = 20; // update value
 bool alarmState = false;
 
 // Initialise LCD
-LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+LiquidCrystal lcd(12, 11, 2, 3, 4, 5);
 unsigned long currentTime;
 unsigned long prevTime;
-unsigned long cyclePeriod = 300; // time in ms to alternate the screen values
+unsigned long cyclePeriod = 100; // time in ms to alternate the screen values (note 100ms in tinkercad =/= 100ms real time)
 bool cycle = true;
 bool firstLoop = true;
 
@@ -72,15 +72,13 @@ bool firstLoop = true;
 // ----------- //
 void setup() {
   Wire.begin(); // join I2C bus (address optional for master device)
-  Serial.begin(9600);
-  pinMode(alarmLEDPin, OUTPUT);
-  pinMode(alarmBuzzerPin, OUTPUT);
-  pinMode(bloodPumpStartPin, OUTPUT);
-  pinMode(hepPumpStartPin, OUTPUT);
-  pinMode(dialPumpStartPin, OUTPUT);
-  pinMode(venClampActivePin, OUTPUT);
-  pinMode(mixerStartPin, OUTPUT);
-  pinMode(deaeratorStartPin, OUTPUT);
+  //Serial.begin(9600);
+pinMode(alarmLEDPin, OUTPUT);
+pinMode(alarmBuzzerPin, OUTPUT);
+pinMode(startCommandPin, INPUT_PULLUP);
+pinMode(EStopPin, INPUT_PULLUP);
+pinMode(deaeratorStartPin, OUTPUT);
+
   lcd.begin(16, 2);
 }
 
@@ -88,8 +86,14 @@ void setup() {
 // MAIN LOOP  //
 // ---------- //
 void loop() {
-
-  // Read Analogue Inputs
+  // Read Buttons
+  startCommand = digitalRead(startCommandPin);
+  EStop = digitalRead(EStopPin);
+  
+  if(startCommand==false){
+    EStop=true;
+  }
+   // Read Analogue Inputs
   artPressVal = analogRead(artPressPin);
   artTempVal = analogRead(artTempPin);
   hepLevelVal = analogRead(hepLevelPin);
@@ -97,6 +101,7 @@ void loop() {
 
   alarmState = (artPressVal > PRESSURE_HIGH or artPressVal < PRESSURE_LOW);
 
+  // Trigger LED + Buzzer if any conditions satisfied
   if (alarmState) {
     digitalWrite(alarmLEDPin, HIGH);
     digitalWrite(alarmBuzzerPin, HIGH);
@@ -110,6 +115,7 @@ void loop() {
     displayUpdate("Art Press: ", artPressVal, "Art Temp:  ", artTempVal);
     firstLoop = false;
   }
+  
   // Update Display
   currentTime = millis();
   if (currentTime - prevTime > cyclePeriod) {
@@ -122,13 +128,13 @@ void loop() {
     cycle = !cycle;
   }
 
+  // Request IO from slave 0x10 (4 x analogue values)
   Wire.requestFrom(0x10, 16);
   I2C_readAnything(venTempVal_S1);
   I2C_readAnything(venPressVal_S1);
   I2C_readAnything(wastePressVal_S1);
   I2C_readAnything(wasteLevelVal_S1);
-
-  // Request IO from slave 0x01 (4 x analogue values)
+  
   /*Wire.requestFrom(0x01,16);
     I2C_readAnything(venTempVal_S1);
     I2C_readAnything(venPressVal_S1);
