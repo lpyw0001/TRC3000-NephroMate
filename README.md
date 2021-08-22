@@ -2,7 +2,7 @@
 Current Tinkercad Project file found here: 
 https://www.tinkercad.com/things/0snkyoh6L9Z-trc3000-circuitry-progress-submission/editel?sharecode=y1236gPW94cCms9rNrWc50mD1iBehIU5KO_R6rGxnRg
 
-For details refer to IO-List-B saved in "TRC3000 - NephroMate/02 - Technical Work/01 - Software". A summary of the devices used and operating philosophy is depicted below.
+For details refer to IO-List-B saved in "TRC3000 - NephroMate/02 - Technical Work/01 - Software". A summary of the devices used and operating philosophy is described below.
 
 ## Circuit Components
 **Blood Circuit**
