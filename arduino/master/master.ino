@@ -119,13 +119,18 @@ void loop() {
   displayUpdateString("Machine off.", "Press start.");
   if (startCommand == false) { // Push button is active low (pullup resistor)
     startCommandLatch = true;
-    Wire.beginTransmission(0x10);
-    I2C_writeAnything(startCommandLatch);
-    Wire.endTransmission();
   }
 
   while ((startCommandLatch) & (currentTime < runTime)) {
-
+   
+    if (firstLoop) {
+      displayUpdateString("Priming Complete", "Alarm tests pass");
+      delay(50); // hold message on screen for first loop
+      Wire.beginTransmission(0x10);
+      I2C_writeAnything(startCommandLatch);
+      Wire.endTransmission();
+    }
+    
     // Check for Air in the line
     digitalWrite(airDetectTXPin, LOW);
     delayMicroseconds(5);
@@ -170,12 +175,10 @@ void loop() {
     dialTempAlarm = dialTempVal_S1 > TEMP_HIGH || dialTempVal_S1 < TEMP_LOW;
 
     anyAlarmTriggered = artPressureAlarm || venPressAlarm || airDetectAlarm || dialConductivityAlarm || pHAlarm || dialTempAlarm;
-
-    if (firstLoop) {
-      displayUpdateString("Priming Complete", "Alarm tests pass");
-      firstLoop = false;
+    
+    if(firstLoop){
       anyAlarmTriggered = false; // Alarms not triggered first loop
-      delay(50); // hold message on screen for first loop
+      firstLoop = false;
     }
 
     // Trigger LED + Buzzer if any alarm conditions satisfied
@@ -211,7 +214,7 @@ void loop() {
 // Update Screen  //
 // ------------- //
 void displayUpdateValue(String text1, double value1, String text2, double value2) {
-  lcd.setCursor(0, 0);
+  lcd.clear();
   lcd.print(text1);
   lcd.print(value1);
   lcd.setCursor(0, 1);
@@ -220,7 +223,7 @@ void displayUpdateValue(String text1, double value1, String text2, double value2
 }
 
 void displayUpdateString(String text1, String text2) {
-  lcd.setCursor(0, 0);
+  lcd.clear();
   lcd.print(text1);
   lcd.setCursor(0, 1);
   lcd.print(text2);

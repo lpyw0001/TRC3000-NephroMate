@@ -126,7 +126,7 @@ void MasterControl(int dataSize){
 
 // Update Screen
 void displayUpdate(String text1, double value1, String text2, double value2) {
-  lcd.setCursor(0, 0);
+  lcd.clear();
   lcd.print(text1);
   lcd.print(value1);
   lcd.setCursor(0, 1);
