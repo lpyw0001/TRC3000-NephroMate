@@ -37,6 +37,7 @@ double pHVal = 0;
 double dialTempVal = 0;
 double dialPressVal = 0;
 
+// Scaled Analogue Values
 double dialConductivityScl = 0;
 double pHScl = 0;
 double dialTempScl = 0;
