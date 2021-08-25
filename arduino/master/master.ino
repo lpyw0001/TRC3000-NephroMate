@@ -39,15 +39,15 @@ double wastePressVal = 0;
 // Digital Pins
 int alarmLEDPin = 0;
 int alarmBuzzerPin = 1;
-int startCommandPin = 6;
-int EStopPin = 7;
+int startCommandPin = 2;
+int EStopPin = 3;
 int airDetectTXPin = 8;
 int airDetectRXPin = 9;
 
 bool startCommand = true; // Active Low
 bool EStop = true; // Active Low
-bool startCommandLatch = false;
-
+volatile bool startCommandLatch = false; // value can change in ISR
+bool startCommandPrev = false;
 // From Slave 1
 double dialConductivityVal_S1 = 0;
 double pHVal_S1 = 0;
@@ -86,7 +86,7 @@ bool dialTempAlarm = false;
 bool anyAlarmTriggered = false;
 
 // Initialise LCD
-LiquidCrystal lcd(12, 11, 2, 3, 4, 5); // (rs,enable,d4,d5,d6,d7)
+LiquidCrystal lcd(12, 11, 6, 7, 4, 5); // (rs,enable,d4,d5,d6,d7)
 unsigned long currentTime = 0;
 unsigned long prevTime = 0;
 unsigned long cyclePeriod = 100; // time in ms to alternate the screen values (note 100ms in tinkercad =/= 100ms real time)
@@ -102,7 +102,9 @@ void setup() {
   pinMode(alarmLEDPin, OUTPUT);
   pinMode(alarmBuzzerPin, OUTPUT);
   pinMode(startCommandPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(startCommandPin), startCommandISR, FALLING);
   pinMode(EStopPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(EStopPin), stopCommandISR, FALLING);
   pinMode(airDetectTXPin, OUTPUT);
   pinMode(airDetectRXPin, INPUT);
   lcd.begin(16, 2);
@@ -114,23 +116,23 @@ void setup() {
 void loop() {
 
   // Read Buttons
-  startCommand = digitalRead(startCommandPin);
-  EStop = digitalRead(EStopPin);
-  displayUpdateString("Machine off.", "Press start.");
-  if (startCommand == false) { // Push button is active low (pullup resistor)
+  //startCommand = digitalRead(startCommandPin);
+  //EStop = digitalRead(EStopPin);
+  displayUpdateString("Machine off.", "Press start.", 0);
+  /*if (startCommand == false) { // Push button is active low (pullup resistor)
     startCommandLatch = true;
-  }
+    }*/
 
   while ((startCommandLatch) & (currentTime < runTime)) {
-   
+
     if (firstLoop) {
-      displayUpdateString("Priming Complete", "Alarm tests pass");
+      displayUpdateString("Priming Complete", "Alarm tests pass", 1);
       delay(50); // hold message on screen for first loop
       Wire.beginTransmission(0x10);
       I2C_writeAnything(startCommandLatch);
       Wire.endTransmission();
     }
-    
+
     // Check for Air in the line
     digitalWrite(airDetectTXPin, LOW);
     delayMicroseconds(5);
@@ -175,8 +177,8 @@ void loop() {
     dialTempAlarm = dialTempVal_S1 > TEMP_HIGH || dialTempVal_S1 < TEMP_LOW;
 
     anyAlarmTriggered = artPressureAlarm || venPressAlarm || airDetectAlarm || dialConductivityAlarm || pHAlarm || dialTempAlarm;
-    
-    if(firstLoop){
+
+    if (firstLoop) {
       anyAlarmTriggered = false; // Alarms not triggered first loop
       firstLoop = false;
     }
@@ -203,18 +205,41 @@ void loop() {
       cycle = !cycle;
     }
 
-    // Exit loop if EStop Pressed
-    if (digitalRead(EStopPin) == false) {
-      startCommandLatch = false;
+    if (startCommandPrev != startCommandLatch) {
+      Wire.beginTransmission(0x10);
+      I2C_writeAnything(startCommandLatch);
+      Wire.endTransmission();
     }
+
+    startCommandPrev = startCommandLatch;
+
+    // Exit loop if EStop Pressed
+    /*if (digitalRead(EStopPin) == false) {
+      startCommandLatch = false;
+      Wire.beginTransmission(0x10);
+      I2C_writeAnything(startCommandLatch);
+      Wire.endTransmission();
+      displayUpdateString("Machine off.", "Press start.", 1);
+      }*/
   }
 }
 
 // -------------- //
 // Update Screen  //
 // ------------- //
+void startCommandISR() {
+  startCommandLatch = true;
+  /*Wire.beginTransmission(0x10);
+    I2C_writeAnything(startCommandLatch);
+    Wire.endTransmission();*/
+}
+
+void stopCommandISR() {
+  startCommandLatch = false;
+  displayUpdateString("Machine off.", "Press start.", 1);
+}
 void displayUpdateValue(String text1, double value1, String text2, double value2) {
-  lcd.clear();
+  lcd.clear(); // clear screen and set cursor to (0,0)
   lcd.print(text1);
   lcd.print(value1);
   lcd.setCursor(0, 1);
@@ -222,12 +247,18 @@ void displayUpdateValue(String text1, double value1, String text2, double value2
   lcd.print(value2);
 }
 
-void displayUpdateString(String text1, String text2) {
-  lcd.clear();
+void displayUpdateString(String text1, String text2, bool clear) {
+  if (clear) {
+    lcd.clear(); // clear screen and set cursor to (0,0)
+  }
+  else {
+    lcd.setCursor(0, 0);
+  }
   lcd.print(text1);
   lcd.setCursor(0, 1);
   lcd.print(text2);
 }
+
 // --------------------- //
 // Scale Analogue Input  //
 // -------------------- //

@@ -49,14 +49,23 @@ unsigned long currentTime;
 unsigned long prevTime;
 unsigned long cyclePeriod = 105; // time in ms to alternate the screen values
 bool cycle = true;
-bool firstLoop = true;
 
 // Output Objects
 Servo dialysateClamp;
+Servo venousClamp;
 const int CLAMP_ANGLE = 90;
 const int CLAMP_OFF = 0;
+bool startCommand = false; // From Master
 
-bool startCommand=false; // From Master
+// Digital Pins
+int mixerIN1Pin = 0;
+int bloodPumpIN2Pin = 1;
+int bloodPumpIN1Pin = 6;
+int dialPumpIN1Pin = 7;
+int dialPumpIN2Pin = 8;
+int dialClampActivePin = 9;
+int venClampActivePin = 10;
+int mixerIN2Pin = 13;
 
 // ----------- //
 // SETUP LOOP  //
@@ -64,8 +73,17 @@ bool startCommand=false; // From Master
 void setup() {
   Wire.begin(0x10); // join I2C bus as slave with address 0x10
   Wire.onRequest(IOSend);
- // dialysateClamp.attach(9);
+  dialysateClamp.attach(9);
+  venousClamp.attach(10);
   Wire.onReceive(MasterControl);
+  pinMode(mixerIN1Pin, OUTPUT);
+  pinMode(bloodPumpIN2Pin, OUTPUT);
+  pinMode(bloodPumpIN1Pin, OUTPUT);
+  pinMode(dialPumpIN1Pin, OUTPUT);
+  pinMode(dialPumpIN2Pin, OUTPUT);
+  pinMode(dialClampActivePin, OUTPUT);
+  pinMode(venClampActivePin, OUTPUT);
+  pinMode(mixerIN2Pin, OUTPUT);
   lcd.begin(16, 2);
 }
 
@@ -74,7 +92,7 @@ void setup() {
 // ---------- //
 
 void loop() {
-  while(startCommand){
+  while (startCommand) {
     // Read Analogue Inputs
     dialConductivityVal = analogRead(dialConductivityPin);
     pHVal = analogRead(pHPin);
@@ -88,25 +106,32 @@ void loop() {
     dialPressScl = scaleInput(dialPressVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUE
 
     //displayUpdate();
-    if (firstLoop) {
+    /*if (firstLoop) {
       displayUpdate("Dial Cond: ", dialConductivityScl, "       pH: ", pHScl);
       firstLoop = false;
-    }
+      }*/
+
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
         displayUpdate("Dial Cond: ", dialConductivityScl, "       pH: ", pHScl);
+        dialysateClamp.write(CLAMP_OFF);
+        venousClamp.write(CLAMP_ANGLE);
       } else {
         displayUpdate("Dial Temp: ", dialTempScl, "Dial Press: ", dialPressScl);
+        dialysateClamp.write(CLAMP_ANGLE);
+        venousClamp.write(CLAMP_OFF);
       }
       prevTime = currentTime;
       cycle = !cycle;
-      dialysateClamp.write(CLAMP_OFF);
     }
+    digitalWrite(bloodPumpIN1Pin, HIGH);
+    digitalWrite(bloodPumpIN2Pin, LOW);
   }
+  lcd.clear();
   // TO DO
   // Activate Clamp when requested by Master
- // dialysateClamp.write(CLAMP_ANGLE);
+  // dialysateClamp.write(CLAMP_ANGLE);
   // TO DO
 }
 
@@ -121,13 +146,13 @@ void IOSend() {
   I2C_writeAnything(dialPressScl);
 }
 
-void MasterControl(int dataSize){
+void MasterControl(int dataSize) {
   I2C_readAnything(startCommand);
 }
 
 // Update Screen
 void displayUpdate(String text1, double value1, String text2, double value2) {
-  lcd.clear();
+  lcd.clear(); // clear screen and set cursor to (0,0)
   lcd.print(text1);
   lcd.print(value1);
   lcd.setCursor(0, 1);
