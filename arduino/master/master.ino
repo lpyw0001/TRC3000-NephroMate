@@ -119,10 +119,16 @@ void loop() {
   //startCommand = digitalRead(startCommandPin);
   //EStop = digitalRead(EStopPin);
   displayUpdateString("Machine off.", "Press start.", 0);
+  firstLoop = true;
   /*if (startCommand == false) { // Push button is active low (pullup resistor)
     startCommandLatch = true;
     }*/
-
+    
+  // Make sure slave devices have stopped (e.g. if reset button on master pressed)
+  Wire.beginTransmission(0x10);
+    I2C_writeAnything(false);
+   Wire.endTransmission();
+  
   while ((startCommandLatch) & (currentTime < runTime)) {
 
     if (firstLoop) {
@@ -140,7 +146,7 @@ void loop() {
     delayMicroseconds(10); // Send + Receive
     digitalWrite(airDetectTXPin, LOW);
     airDetectValue = pulseIn(airDetectRXPin, HIGH);
-
+    
     // Read Analogue Inputs
     artPressVal = analogRead(artPressPin);
     inflowPressVal = analogRead(inflowPressPin);
@@ -153,6 +159,14 @@ void loop() {
     venPressVal = scaleInput(venPressVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUES
     wastePressVal = scaleInput(wastePressVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUES
 
+    // Check if Emergency Stop Button has been pressed and relay stop to slave devices
+    if (!startCommandLatch) {
+      Wire.beginTransmission(0x10);
+      I2C_writeAnything(startCommandLatch);
+      Wire.endTransmission();
+      break;
+    }
+    
     // Request IO from slave 0x10 (4 x analogue values)
     Wire.requestFrom(0x10, 16);
     I2C_readAnything(dialConductivityVal_S1);
@@ -205,7 +219,8 @@ void loop() {
       cycle = !cycle;
     }
 
-    if (startCommandPrev != startCommandLatch) {
+    // Second Check if Emergency Stop Button has been pressed and relay stop to slave devices
+    if (!startCommandLatch) {
       Wire.beginTransmission(0x10);
       I2C_writeAnything(startCommandLatch);
       Wire.endTransmission();

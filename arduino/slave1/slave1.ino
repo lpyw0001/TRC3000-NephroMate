@@ -37,7 +37,6 @@ double pHVal = 0;
 double dialTempVal = 0;
 double dialPressVal = 0;
 
-// Scaled Analogue Values
 double dialConductivityScl = 0;
 double pHScl = 0;
 double dialTempScl = 0;
@@ -129,6 +128,7 @@ void loop() {
     digitalWrite(bloodPumpIN2Pin, LOW);
   }
   lcd.clear();
+  // Stop all motors...
   // TO DO
   // Activate Clamp when requested by Master
   // dialysateClamp.write(CLAMP_ANGLE);
