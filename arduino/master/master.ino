@@ -61,8 +61,8 @@ double bloodLeakVal_S2 = 0;
 double dialLevelVal_S2 = 0;
 
 // Alarm Limits
-const double PRESSURE_HIGH = 100; // TO DO update value
-const double PRESSURE_LOW = 20; // TO DO update value
+const double PRESSURE_HIGH = 150; // TO DO update value
+const double PRESSURE_LOW = -250; // TO DO update value
 const double LEVEL_LOW = 10;
 const double TEMP_LOW = 36;
 const double TEMP_HIGH = 42;
@@ -119,6 +119,10 @@ void loop() {
   //startCommand = digitalRead(startCommandPin);
   //EStop = digitalRead(EStopPin);
   displayUpdateString("Machine off.", "Press start.", 0);
+  
+  // Clear Alarms
+  digitalWrite(alarmLEDPin, LOW);
+  digitalWrite(alarmBuzzerPin, LOW);
   firstLoop = true;
   /*if (startCommand == false) { // Push button is active low (pullup resistor)
     startCommandLatch = true;
@@ -126,8 +130,11 @@ void loop() {
     
   // Make sure slave devices have stopped (e.g. if reset button on master pressed)
   Wire.beginTransmission(0x10);
-    I2C_writeAnything(false);
-   Wire.endTransmission();
+  I2C_writeAnything(false);
+  Wire.endTransmission();
+  Wire.beginTransmission(0x11);
+  I2C_writeAnything(false);
+  Wire.endTransmission();
   
   while ((startCommandLatch) & (currentTime < runTime)) {
 
@@ -135,6 +142,9 @@ void loop() {
       displayUpdateString("Priming Complete", "Alarm tests pass", 1);
       delay(50); // hold message on screen for first loop
       Wire.beginTransmission(0x10);
+      I2C_writeAnything(startCommandLatch);
+      Wire.endTransmission();
+      Wire.beginTransmission(0x11);
       I2C_writeAnything(startCommandLatch);
       Wire.endTransmission();
     }
@@ -154,14 +164,17 @@ void loop() {
     wastePressVal = analogRead(wastePressPin);
 
     // Scale Analogue Inputs
-    artPressVal = scaleInput(artPressVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUES
-    inflowPressVal = scaleInput(inflowPressVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUES
-    venPressVal = scaleInput(venPressVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUES
-    wastePressVal = scaleInput(wastePressVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUES
+    artPressVal = scaleInput(artPressVal, 0, 466, -300.0, -30.0); // TO DO UPDATE VALUES - 466 max value read from sensor?? - TBC
+    inflowPressVal = scaleInput(inflowPressVal, 0, 466, 50.0, 250.0); // TO DO UPDATE VALUES (1023?)
+    venPressVal = scaleInput(venPressVal, 0, 466, 50.0, 250.0); // TO DO UPDATE VALUES
+    wastePressVal = scaleInput(wastePressVal, 0, 466, 0, 400.0); // TO DO UPDATE VALUES
 
     // Check if Emergency Stop Button has been pressed and relay stop to slave devices
     if (!startCommandLatch) {
       Wire.beginTransmission(0x10);
+      I2C_writeAnything(startCommandLatch);
+      Wire.endTransmission();
+      Wire.beginTransmission(0x11);
       I2C_writeAnything(startCommandLatch);
       Wire.endTransmission();
       break;
@@ -200,7 +213,7 @@ void loop() {
     // Trigger LED + Buzzer if any alarm conditions satisfied
     if (anyAlarmTriggered) {
       digitalWrite(alarmLEDPin, HIGH);
-      //digitalWrite(alarmBuzzerPin, HIGH);
+     // digitalWrite(alarmBuzzerPin, HIGH);
     }
     else {
       digitalWrite(alarmLEDPin, LOW);
@@ -222,6 +235,10 @@ void loop() {
     // Second Check if Emergency Stop Button has been pressed and relay stop to slave devices
     if (!startCommandLatch) {
       Wire.beginTransmission(0x10);
+      I2C_writeAnything(startCommandLatch);
+      Wire.endTransmission();
+      
+      Wire.beginTransmission(0x11);
       I2C_writeAnything(startCommandLatch);
       Wire.endTransmission();
     }

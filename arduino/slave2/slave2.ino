@@ -53,6 +53,7 @@ bool firstLoop = true;
 
 // Output Objects
 // include: waste pump, heparin pump, deaerator, heater
+bool startCommand = false; // From Master
 
 // ----------- //
 // SETUP LOOP  //

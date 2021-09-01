@@ -46,7 +46,7 @@ double dialPressScl = 0;
 LiquidCrystal lcd(12, 11, 2, 3, 4, 5); // (rs,enable,d4,d5,d6,d7)
 unsigned long currentTime;
 unsigned long prevTime;
-unsigned long cyclePeriod = 105; // time in ms to alternate the screen values
+unsigned long cyclePeriod = 100; // time in ms to alternate the screen values
 bool cycle = true;
 
 // Output Objects
@@ -72,7 +72,9 @@ int mixerIN2Pin = 13;
 void setup() {
   Wire.begin(0x10); // join I2C bus as slave with address 0x10
   Wire.onRequest(IOSend);
+  dialysateClamp.write(0);
   dialysateClamp.attach(9);
+  venousClamp.write(0);
   venousClamp.attach(10);
   Wire.onReceive(MasterControl);
   pinMode(mixerIN1Pin, OUTPUT);
@@ -84,6 +86,7 @@ void setup() {
   pinMode(venClampActivePin, OUTPUT);
   pinMode(mixerIN2Pin, OUTPUT);
   lcd.begin(16, 2);
+  
 }
 
 // ---------- //
@@ -101,8 +104,8 @@ void loop() {
     // Scale Analogue Inputs for Transmission to Master
     dialConductivityScl = scaleInput(dialConductivityVal, 0, 1023, 10.0, 30.0);
     pHScl = scaleInput(pHVal, 0, 1023, 0.0, 14.0);
-    dialTempScl = scaleInput(dialTempVal, 0, 1023, 5.0, 60.0);
-    dialPressScl = scaleInput(dialPressVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUE
+    dialTempScl = scaleInput(dialTempVal, 0, 250, 5.0, 60.0); // Max raw value is 358?? - TBC
+    dialPressScl = scaleInput(dialPressVal, 0, 1023, 0.0, 400.0); // TO DO UPDATE VALUE
 
     //displayUpdate();
     /*if (firstLoop) {
@@ -117,15 +120,21 @@ void loop() {
         dialysateClamp.write(CLAMP_OFF);
         venousClamp.write(CLAMP_ANGLE);
       } else {
-        displayUpdate("Dial Temp: ", dialTempScl, "Dial Press: ", dialPressScl);
+        displayUpdate(" Dial Temp: ", dialTempScl, "Dial Press: ", dialPressScl);
         dialysateClamp.write(CLAMP_ANGLE);
         venousClamp.write(CLAMP_OFF);
       }
       prevTime = currentTime;
       cycle = !cycle;
     }
+    
     digitalWrite(bloodPumpIN1Pin, HIGH);
     digitalWrite(bloodPumpIN2Pin, LOW);
+    digitalWrite(dialPumpIN1Pin, HIGH);
+    digitalWrite(dialPumpIN2Pin, LOW);
+    digitalWrite(mixerIN1Pin, HIGH);
+    digitalWrite(mixerIN2Pin, LOW);
+
   }
   lcd.clear();
   // Stop all motors...
