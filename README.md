@@ -1,6 +1,6 @@
 # TRC3000-NephroMate
 Current Tinkercad Project file found here: 
-https://www.tinkercad.com/things/0IEXT8VFWHw-powerful-fulffy/editel?sharecode=Rocs1S4gcAvp0MLHOnVzNjW_fpQymTqdQbukNxZAzCo
+https://www.tinkercad.com/things/0IEXT8VFWHw-trc3000-circuitry/editel?sharecode=dOxBm0435zr4aYP6YzMup0qWIt_bQTKANjYRnqSiHBI
 
 For details refer to IO-List-B saved in "TRC3000 - NephroMate/02 - Technical Work/01 - Software". A summary of the devices used and operating philosophy is described below.
 
