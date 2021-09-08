@@ -42,8 +42,13 @@ double pHScl = 0;
 double dialTempScl = 0;
 double dialPressScl = 0;
 
+
+// Fault Conditions
+bool bloodPumpFault = false;
+bool clampLines = false;
+
 // Initialise LCD
-LiquidCrystal lcd(12, 11, 2, 3, 4, 5); // (rs,enable,d4,d5,d6,d7)
+LiquidCrystal lcd(12, 13, 2, 3, 4, 5); // (rs,enable,d4,d5,d6,d7)
 unsigned long currentTime;
 unsigned long prevTime;
 unsigned long cyclePeriod = 100; // time in ms to alternate the screen values
@@ -64,7 +69,7 @@ int dialPumpIN1Pin = 7;
 int dialPumpIN2Pin = 8;
 int dialClampActivePin = 9;
 int venClampActivePin = 10;
-int mixerIN2Pin = 13;
+int mixerIN2Pin = 11;
 
 // ----------- //
 // SETUP LOOP  //
@@ -86,7 +91,6 @@ void setup() {
   pinMode(venClampActivePin, OUTPUT);
   pinMode(mixerIN2Pin, OUTPUT);
   lcd.begin(16, 2);
-  
 }
 
 // ---------- //
@@ -95,6 +99,7 @@ void setup() {
 
 void loop() {
   while (startCommand) {
+
     // Read Analogue Inputs
     dialConductivityVal = analogRead(dialConductivityPin);
     pHVal = analogRead(pHPin);
@@ -107,37 +112,52 @@ void loop() {
     dialTempScl = scaleInput(dialTempVal, 0, 250, 5.0, 60.0); // Max raw value is 358?? - TBC
     dialPressScl = scaleInput(dialPressVal, 0, 1023, 0.0, 400.0); // TO DO UPDATE VALUE
 
-    //displayUpdate();
-    /*if (firstLoop) {
-      displayUpdate("Dial Cond: ", dialConductivityScl, "       pH: ", pHScl);
-      firstLoop = false;
-      }*/
-
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
         displayUpdate("Dial Cond: ", dialConductivityScl, "       pH: ", pHScl);
-        dialysateClamp.write(CLAMP_OFF);
-        venousClamp.write(CLAMP_ANGLE);
       } else {
         displayUpdate(" Dial Temp: ", dialTempScl, "Dial Press: ", dialPressScl);
-        dialysateClamp.write(CLAMP_ANGLE);
-        venousClamp.write(CLAMP_OFF);
       }
       prevTime = currentTime;
       cycle = !cycle;
     }
-    
-    digitalWrite(bloodPumpIN1Pin, HIGH);
-    digitalWrite(bloodPumpIN2Pin, LOW);
-    digitalWrite(dialPumpIN1Pin, HIGH);
-    digitalWrite(dialPumpIN2Pin, LOW);
+
+    // Mixer runs at a fixed speed continuously
     digitalWrite(mixerIN1Pin, HIGH);
     digitalWrite(mixerIN2Pin, LOW);
 
+    // Dialysate pump runs at a fixed speed continuously
+    digitalWrite(dialPumpIN1Pin, HIGH);
+    digitalWrite(dialPumpIN2Pin, LOW);
+    
+    // Blood pump PID controlled (against what?)
+    // Currently just start/stop based on fault conditions
+    if(bloodPumpFault){
+      digitalWrite(bloodPumpIN1Pin, LOW);
+      digitalWrite(bloodPumpIN2Pin, LOW);
+    }else{
+      digitalWrite(bloodPumpIN1Pin, HIGH);
+      digitalWrite(bloodPumpIN2Pin, LOW);
+    }
+
+    // Dialysate clamp: triggered when air is detected?
+    // Venous clamp: triggered when air is detected?
+    if(clampLines){
+      venousClamp.write(CLAMP_ANGLE);
+      dialysateClamp.write(CLAMP_ANGLE);
+    }
   }
+
   lcd.clear();
-  // Stop all motors...
+
+  // Stop all motors
+  digitalWrite(mixerIN1Pin, LOW);
+  digitalWrite(mixerIN2Pin, LOW);
+  digitalWrite(dialPumpIN1Pin, LOW);
+  digitalWrite(dialPumpIN2Pin, LOW);
+
+
   // TO DO
   // Activate Clamp when requested by Master
   // dialysateClamp.write(CLAMP_ANGLE);
@@ -157,6 +177,8 @@ void IOSend() {
 
 void MasterControl(int dataSize) {
   I2C_readAnything(startCommand);
+  I2C_readAnything(bloodPumpFault);
+  I2C_readAnything(clampLines);
 }
 
 // Update Screen
