@@ -26,7 +26,7 @@ template <typename T> unsigned int I2C_readAnything(T& value)
 
 // Analogue Pins
 int artPressPin = A0;
-int in = A1;
+int bloodFlowRatePin = A1;
 int venPressPin = A2;
 int wastePressPin = A3;
 
