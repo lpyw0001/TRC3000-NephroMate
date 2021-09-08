@@ -26,19 +26,19 @@ template <typename T> unsigned int I2C_readAnything(T& value)
 
 // Analogue Pins
 int artPressPin = A0;
-int inflowPressPin = A1;
+int bloodFlowRatePin = A1;
 int venPressPin = A2;
 int wastePressPin = A3;
 
 // Analogue Values
 double artPressVal = 0;
-double inflowPressVal = 0;
+double bloodFlowRateVal = 0;
 double venPressVal = 0;
 double wastePressVal = 0;
 
 // Digital Pins
-int alarmLEDPin = 0;
-int alarmBuzzerPin = 1;
+int alarmLEDPin = 13;
+int alarmBuzzerPin = 10;
 int startCommandPin = 2;
 int EStopPin = 3;
 int airDetectTXPin = 8;
@@ -79,7 +79,7 @@ const double FLOW_TARGET = 250; // user-configurable value in mL/min (usually 25
 // Alarm Variables
 // TO DO ADD SLAVE 2 ALARMS
 bool artPressureAlarm = false;
-bool inflowPressAlarm = false; // always false monitor only
+bool bloodFlowRateAlarm = false; // always false monitor only
 bool venPressAlarm = false;
 bool wastePressAlarm = false; // always false monitor only
 bool airDetectAlarm = false;
@@ -88,6 +88,7 @@ bool dialConductivityAlarm = false;
 bool pHAlarm = false;
 bool dialTempAlarm = false;
 bool anyAlarmTriggered = false;
+bool bloodPumpFault = false;
 
 // Initialise LCD
 LiquidCrystal lcd(12, 11, 6, 7, 4, 5); // (rs,enable,d4,d5,d6,d7)
@@ -112,13 +113,16 @@ void setup() {
   pinMode(airDetectTXPin, OUTPUT);
   pinMode(airDetectRXPin, INPUT);
   lcd.begin(16, 2);
+  Serial.begin(9600);
 }
 
 // ---------- //
 // MAIN LOOP  //
 // ---------- //
 void loop() {
-
+  
+  digitalWrite(alarmBuzzerPin, LOW); // JUST TO REMOVE SOUND DURING TESTING - DELETE THIS LINE
+  
   // Read Buttons
   //startCommand = digitalRead(startCommandPin);
   //EStop = digitalRead(EStopPin);
@@ -139,6 +143,7 @@ void loop() {
   Wire.beginTransmission(0x11);
   I2C_writeAnything(false);
   Wire.endTransmission();
+
   
   while ((startCommandLatch) & (currentTime < runTime)) {
 
@@ -163,13 +168,13 @@ void loop() {
     
     // Read Analogue Inputs
     artPressVal = analogRead(artPressPin);
-    inflowPressVal = analogRead(inflowPressPin);
+    bloodFlowRateVal = analogRead(bloodFlowRatePin);
     venPressVal = analogRead(venPressPin);
     wastePressVal = analogRead(wastePressPin);
 
     // Scale Analogue Inputs
     artPressVal = scaleInput(artPressVal, 0, 466, -300.0, -30.0); // TO DO UPDATE VALUES - 466 max value read from sensor?? - TBC
-    inflowPressVal = scaleInput(inflowPressVal, 0, 466, 50.0, 250.0); // TO DO UPDATE VALUES (1023?)
+    bloodFlowRateVal = scaleInput(bloodFlowRateVal, 0, 466, 50.0, 250.0); // TO DO UPDATE VALUES (1023?)
     venPressVal = scaleInput(venPressVal, 0, 466, 50.0, 250.0); // TO DO UPDATE VALUES
     wastePressVal = scaleInput(wastePressVal, 0, 466, 0, 400.0); // TO DO UPDATE VALUES
 
@@ -206,9 +211,12 @@ void loop() {
     dialConductivityAlarm = dialConductivityVal_S1 > CONDUCTIVITY_HIGH || dialConductivityVal_S1 < CONDUCTIVITY_LOW;
     pHAlarm = pHVal_S1 > PH_HIGH || pHVal_S1 < PH_LOW;
     dialTempAlarm = dialTempVal_S1 > TEMP_HIGH || dialTempVal_S1 < TEMP_LOW;
-
+    
     anyAlarmTriggered = artPressureAlarm || venPressAlarm || airDetectAlarm || dialConductivityAlarm || pHAlarm || dialTempAlarm;
 
+    // Check Device Fault Conditions
+    bloodPumpFault = airDetectAlarm || venPressAlarm || artPressureAlarm; // ADD INFLOW + WATER LEVEL + VEN TEMP
+    
     if (firstLoop) {
       anyAlarmTriggered = false; // Alarms not triggered first loop
       firstLoop = false;
@@ -228,7 +236,8 @@ void loop() {
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
-        displayUpdateValue("Art Press: ", artPressVal, "Inf Press:  ", inflowPressVal);
+        displayUpdateValue("Art Press: ", artPressVal, "Inf Press:  ", bloodFlowRateVal);
+        serialPrint();
       } else {
         displayUpdateValue("Ven Press:  ", venPressVal, "Wst Press: ", wastePressVal);
       }
@@ -248,7 +257,16 @@ void loop() {
     }
 
     startCommandPrev = startCommandLatch;
-
+  
+    // Send fault conditions to slave devices
+    // Update to only send if value changes?
+    // Only one receive function so need to send all values
+     Wire.beginTransmission(0x10);
+      I2C_writeAnything(startCommandLatch);
+      I2C_writeAnything(bloodPumpFault);
+      I2C_writeAnything(airDetectAlarm); // Activate dialysate and venous clamps
+      Wire.endTransmission();
+    
     // Exit loop if EStop Pressed
     /*if (digitalRead(EStopPin) == false) {
       startCommandLatch = false;
@@ -306,4 +324,15 @@ void displayUpdateString(String text1, String text2, bool clear) {
 // y is the scaled value
 double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double scaledMax) {
   return ((scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + scaledMin;
+}
+
+void serialPrint(){
+  // Device run state, speed, alarms, runtime remaing
+  Serial.println(" ** RUNTIME **");
+  Serial.println("Runtime remaining: ");
+  Serial.println(" ** DEVICES **");
+  Serial.println("Blood pump: ");
+  Serial.println(" ** ALARMS **");
+  Serial.println("Arterial Pressure Alarm: ");
+  Serial.println("");
 }
