@@ -43,6 +43,16 @@ double venTempValScl = 0;
 double bloodLeakValScl = 0;
 double dialLevelValScl = 0;
 
+// Digital Pins
+int wastePumpIN1Pin = 0;
+int wastePumpIN2Pin = 1;
+int heparinPumpIN1Pin = 6;
+int heparinPumpIN2Pin = 7;
+int deaeratorIN1Pin = 8;
+int heaterIN1Pin = 9;
+int heaterIN2Pin = 10;
+int deaeratorIN2Pin = 13;
+
 // Initialise LCD
 LiquidCrystal lcd(12, 11, 2, 3, 4, 5); // (rs,enable,d4,d5,d6,d7)
 unsigned long currentTime;
@@ -86,7 +96,7 @@ void loop() {
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
-        displayUpdate("Water Lvl: ", waterLevelValScl, "       Venous Temp: ", venTempValScl);
+        displayUpdate("Water Lvl: ", waterLevelValScl, "Venous Temp: ", venTempValScl);
       } else {
         displayUpdate("Bld Leak Val: ", bloodLeakValScl, "Dial Lvl: ", dialLevelValScl);
       }

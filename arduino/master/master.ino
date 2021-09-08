@@ -72,6 +72,10 @@ const double PH_LOW = 6.8;
 const double PH_HIGH = 7.6;
 const double AIR_DETECT = 2000; // TO DO update value
 
+// PID targets
+const double TEMP_TARGET = 37; // target temperature (degrees Celsius) for dialysate solution
+const double FLOW_TARGET = 250; // user-configurable value in mL/min (usually 250-300, or 300-500, as prescribed by doctor)
+
 // Alarm Variables
 // TO DO ADD SLAVE 2 ALARMS
 bool artPressureAlarm = false;
