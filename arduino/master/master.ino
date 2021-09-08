@@ -26,13 +26,13 @@ template <typename T> unsigned int I2C_readAnything(T& value)
 
 // Analogue Pins
 int artPressPin = A0;
-int inflowPressPin = A1;
+int in = A1;
 int venPressPin = A2;
 int wastePressPin = A3;
 
 // Analogue Values
 double artPressVal = 0;
-double inflowPressVal = 0;
+double bloodFlowRateVal = 0;
 double venPressVal = 0;
 double wastePressVal = 0;
 
@@ -75,7 +75,7 @@ const double AIR_DETECT = 2000; // TO DO update value
 // Alarm Variables
 // TO DO ADD SLAVE 2 ALARMS
 bool artPressureAlarm = false;
-bool inflowPressAlarm = false; // always false monitor only
+bool bloodFlowRateAlarm = false; // always false monitor only
 bool venPressAlarm = false;
 bool wastePressAlarm = false; // always false monitor only
 bool airDetectAlarm = false;
@@ -164,13 +164,13 @@ void loop() {
     
     // Read Analogue Inputs
     artPressVal = analogRead(artPressPin);
-    inflowPressVal = analogRead(inflowPressPin);
+    bloodFlowRateVal = analogRead(bloodFlowRatePin);
     venPressVal = analogRead(venPressPin);
     wastePressVal = analogRead(wastePressPin);
 
     // Scale Analogue Inputs
     artPressVal = scaleInput(artPressVal, 0, 466, -300.0, -30.0); // TO DO UPDATE VALUES - 466 max value read from sensor?? - TBC
-    inflowPressVal = scaleInput(inflowPressVal, 0, 466, 50.0, 250.0); // TO DO UPDATE VALUES (1023?)
+    bloodFlowRateVal = scaleInput(bloodFlowRateVal, 0, 466, 50.0, 250.0); // TO DO UPDATE VALUES (1023?)
     venPressVal = scaleInput(venPressVal, 0, 466, 50.0, 250.0); // TO DO UPDATE VALUES
     wastePressVal = scaleInput(wastePressVal, 0, 466, 0, 400.0); // TO DO UPDATE VALUES
 
@@ -232,7 +232,7 @@ void loop() {
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
-        displayUpdateValue("Art Press: ", artPressVal, "Inf Press:  ", inflowPressVal);
+        displayUpdateValue("Art Press: ", artPressVal, "Inf Press:  ", bloodFlowRateVal);
         serialPrint();
       } else {
         displayUpdateValue("Ven Press:  ", venPressVal, "Wst Press: ", wastePressVal);
