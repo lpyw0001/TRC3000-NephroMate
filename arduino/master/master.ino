@@ -102,8 +102,8 @@ unsigned long currentTime = 0;
 unsigned long prevTime = 0;
 float runTimeRemaining = 0;
 unsigned long cyclePeriod = 100; // time in ms to alternate the screen values (note 100ms in tinkercad =/= 100ms real time)
-unsigned long runTime = 4000; // time in ms to perform hemodialysis (refer comment above)
-unsigned long hepRunTime = 200; // Duration to run Heparin infusion
+unsigned long runTime = 0; // time in ms to perform hemodialysis (refer comment above) (4000)
+unsigned long hepRunTime = 0; // Duration to run Heparin infusion (200)
 bool cycle = true; // alternate values displayed on LCD screen and in serial monitor
 bool firstLoop = true;
 
@@ -129,6 +129,19 @@ void setup() {
 // ---------- //
 void loop() {
 
+
+  /*while(Serial.available()==0){
+    // Collect user input
+    }
+
+
+    Serial.print("\nEnter heparin pump runtime (min): ");
+
+    while(Serial.available()==0){
+    // Collect user input
+    }
+    hepRunTime = (long)Serial.parseInt();*/
+
   displayUpdateString("Machine off.", "Press start.", 0);
 
   // Clear Alarms
@@ -147,6 +160,10 @@ void loop() {
   while ((startCommandLatch) & (currentTime < runTime)) {
 
     if (firstLoop) {
+      /*Serial.print("\nEnter haemodialysis runtime (min): ");
+        if (Serial.available() > 0){
+        runTime = (long)Serial.parseInt();
+        }*/
       displayUpdateString("Priming Complete", "Alarm tests pass", 1);
       delay(50); // hold message on screen for first loop
       Wire.beginTransmission(0x10);
@@ -155,7 +172,7 @@ void loop() {
       Wire.beginTransmission(0x11);
       I2C_writeAnything(startCommandLatch);
       Wire.endTransmission();
-      Serial.println("Haemodialysis started\n");
+      Serial.println("\nHaemodialysis started\n");
     }
 
     // Check for Air in the line
@@ -239,10 +256,10 @@ void loop() {
     runTimeRemaining = (runTime - currentTime) / 18; // arbitrary scaling to return a reasonable value
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
-        displayUpdateValue("Art Press: ", artPressVal, "Inf Press:  ", dialPressVal);
+        displayUpdateValue("Art Press", artPressVal, "Inf Press", dialPressVal);
         serialPrintStatus();
       } else {
-        displayUpdateValue("Ven Press:  ", venPressVal, "Wst Press: ", wastePressVal);
+        displayUpdateValue("Ven Press", venPressVal, "Wst Press", wastePressVal);
         serialPrintValues();
       }
       prevTime = currentTime;
@@ -291,12 +308,33 @@ void stopCommandISR() {
 // ---------- //
 // FUNCTIONS  //
 // ---------- //
+// Update Screen
 void displayUpdateValue(String text1, double value1, String text2, double value2) {
   lcd.clear(); // clear screen and set cursor to (0,0)
-  lcd.print(text1);
+
+  unsigned int strLen1 = text1.length();
+  unsigned int strLen2 = text2.length();
+  String outputText1 = "";
+  String outputText2 = "";
+
+  if ((10 - strLen1) > 0) {
+    for (int i = 0; i < (10 - strLen1); i++) {
+      outputText1 += " ";
+    }
+  }
+  outputText1 = outputText1 + text1 + ": ";
+
+  if ((10 - strLen2) > 0) {
+    for (int i = 0; i < (10 - strLen2); i++) {
+      outputText2 += " ";
+    }
+  }
+  outputText2 = outputText2 + text2 + ": ";
+
+  lcd.print(outputText1);
   lcd.print(value1);
   lcd.setCursor(0, 1);
-  lcd.print(text2);
+  lcd.print(outputText2);
   lcd.print(value2);
 }
 

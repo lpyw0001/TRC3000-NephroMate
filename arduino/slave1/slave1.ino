@@ -29,18 +29,18 @@ template <typename T> unsigned int I2C_readAnything(T& value)
 int dialConductivityPin = A0;
 int pHPin = A1;
 int dialTempPin = A2;
-int dialPressPin = A3;
+int bloodFlowPin = A3;
 
 // Analogue Values
 double dialConductivityVal = 0;
 double pHVal = 0;
 double dialTempVal = 0;
-double dialPressVal = 0;
+double bloodFlowVal = 0;
 
 double dialConductivityScl = 0;
 double pHScl = 0;
 double dialTempScl = 0;
-double dialPressScl = 0;
+double bloodFlowScl = 0;
 
 
 // Fault Conditions
@@ -104,20 +104,20 @@ void loop() {
     dialConductivityVal = analogRead(dialConductivityPin);
     pHVal = analogRead(pHPin);
     dialTempVal = analogRead(dialTempPin);
-    dialPressVal = analogRead(dialPressPin);
+    bloodFlowVal = analogRead(bloodFlowPin);
 
     // Scale Analogue Inputs for Transmission to Master
     dialConductivityScl = scaleInput(dialConductivityVal, 0, 1023, 10.0, 30.0);
     pHScl = scaleInput(pHVal, 0, 1023, 0.0, 14.0);
     dialTempScl = scaleInput(dialTempVal, 0, 250, 5.0, 60.0); // Max raw value is 358?? - TBC
-    dialPressScl = scaleInput(dialPressVal, 0, 1023, 0.0, 400.0); // TO DO UPDATE VALUE
+    bloodFlowScl = scaleInput(bloodFlowVal, 0, 1023, 0.0, 400.0); // TO DO UPDATE VALUE
 
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
-        displayUpdate("Dial Cond: ", dialConductivityScl, "       pH: ", pHScl);
+        displayUpdate("Dial Cond", dialConductivityScl, "pH", pHScl);
       } else {
-        displayUpdate(" Dial Temp: ", dialTempScl, "Dial Press: ", dialPressScl);
+        displayUpdate(" Dial Temp", dialTempScl, "Dial Press", bloodFlowScl);
       }
       prevTime = currentTime;
       cycle = !cycle;
@@ -130,20 +130,20 @@ void loop() {
     // Dialysate pump runs at a fixed speed continuously
     digitalWrite(dialPumpIN1Pin, HIGH);
     digitalWrite(dialPumpIN2Pin, LOW);
-    
+
     // Blood pump PID controlled (against what?)
     // Currently just start/stop based on fault conditions
-    if(bloodPumpFault){
+    if (bloodPumpFault) {
       digitalWrite(bloodPumpIN1Pin, LOW);
       digitalWrite(bloodPumpIN2Pin, LOW);
-    }else{
+    } else {
       digitalWrite(bloodPumpIN1Pin, HIGH);
       digitalWrite(bloodPumpIN2Pin, LOW);
     }
 
     // Dialysate clamp: triggered when air is detected?
     // Venous clamp: triggered when air is detected?
-    if(clampLines){
+    if (clampLines) {
       venousClamp.write(CLAMP_ANGLE);
       dialysateClamp.write(CLAMP_ANGLE);
     }
@@ -172,7 +172,7 @@ void IOSend() {
   I2C_writeAnything(dialConductivityScl);
   I2C_writeAnything(pHScl);
   I2C_writeAnything(dialTempScl);
-  I2C_writeAnything(dialPressScl);
+  I2C_writeAnything(bloodFlowScl);
 }
 
 void MasterControl(int dataSize) {
@@ -184,10 +184,30 @@ void MasterControl(int dataSize) {
 // Update Screen
 void displayUpdate(String text1, double value1, String text2, double value2) {
   lcd.clear(); // clear screen and set cursor to (0,0)
-  lcd.print(text1);
+
+  unsigned int strLen1 = text1.length();
+  unsigned int strLen2 = text2.length();
+  String outputText1 = "";
+  String outputText2 = "";
+
+  if ((10 - strLen1) > 0) {
+    for (int i = 0; i < (10 - strLen1); i++) {
+      outputText1 += " ";
+    }
+  }
+  outputText1 = outputText1 + text1 + ": ";
+
+  if ((10 - strLen2) > 0) {
+    for (int i = 0; i < (10 - strLen2); i++) {
+      outputText2 += " ";
+    }
+  }
+  outputText2 = outputText2 + text2 + ": ";
+
+  lcd.print(outputText1);
   lcd.print(value1);
   lcd.setCursor(0, 1);
-  lcd.print(text2);
+  lcd.print(outputText2);
   lcd.print(value2);
 }
 

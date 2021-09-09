@@ -70,7 +70,7 @@ void setup() {
 // ---------- //
 
 void loop() {
-  while(startCommand){
+  while (startCommand) {
     // Read Analogue Inputs
     waterLevelVal = analogRead(waterLevelPin);
     venTempVal = analogRead(venTempPin);
@@ -86,9 +86,9 @@ void loop() {
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
-        displayUpdate("Water Lvl: ", waterLevelValScl, "       Venous Temp: ", venTempValScl);
+        displayUpdate("Water Lvl", waterLevelValScl, "Ven Temp", venTempValScl);
       } else {
-        displayUpdate("Bld Leak Val: ", bloodLeakValScl, "Dial Lvl: ", dialLevelValScl);
+        displayUpdate("Bld Leak", bloodLeakValScl, "Dial Lvl", dialLevelValScl);
       }
       prevTime = currentTime;
       cycle = !cycle;
@@ -97,7 +97,7 @@ void loop() {
   }
   // TO DO
   // Activate Clamp when requested by Master
- // dialysateClamp.write(CLAMP_ANGLE);
+  // dialysateClamp.write(CLAMP_ANGLE);
   // TO DO
 }
 
@@ -112,17 +112,37 @@ void IOSend() {
   I2C_writeAnything(dialLevelValScl);
 }
 
-void MasterControl(int dataSize){
+void MasterControl(int dataSize) {
   I2C_readAnything(startCommand);
 }
 
 // Update Screen
 void displayUpdate(String text1, double value1, String text2, double value2) {
-  lcd.clear();
-  lcd.print(text1);
+  lcd.clear(); // clear screen and set cursor to (0,0)
+
+  unsigned int strLen1 = text1.length();
+  unsigned int strLen2 = text2.length();
+  String outputText1 = "";
+  String outputText2 = "";
+
+  if ((10 - strLen1) > 0) {
+    for (int i = 0; i < (10 - strLen1); i++) {
+      outputText1 += " ";
+    }
+  }
+  outputText1 = outputText1 + text1 + ": ";
+
+  if ((10 - strLen2) > 0) {
+    for (int i = 0; i < (10 - strLen2); i++) {
+      outputText2 += " ";
+    }
+  }
+  outputText2 = outputText2 + text2 + ": ";
+
+  lcd.print(outputText1);
   lcd.print(value1);
   lcd.setCursor(0, 1);
-  lcd.print(text2);
+  lcd.print(outputText2);
   lcd.print(value2);
 }
 
