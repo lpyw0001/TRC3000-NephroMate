@@ -75,9 +75,20 @@ const double PH_LOW = 6.8;
 const double PH_HIGH = 7.6;
 const double AIR_DETECT = 2000; // TO DO update value
 
-// PID targets
-const double TEMP_TARGET = 37; // target temperature (degrees Celsius) for dialysate solution
-const double FLOW_TARGET = 250; // user-configurable value in mL/min (usually 250-300, or 300-500, as prescribed by doctor)
+// PID Constants & variables
+const float TARGET_TEMP = 37; // target temperature (degrees Celsius) for dialysate solution
+const float TARGET_FLOW = 250; // target user-configurable value in mL/min (usually 250-300, or 300-500, as prescribed by doctor)
+const float kp_temp = 1;
+const float ki_temp = 0;
+const float kd_temp = 0;
+const float kp_flow = 1;
+const float ki_flow = 0;
+const float kd_flow = 0;
+long prevT = 0;
+float eprev_temp = 0;
+float eintegral_temp = 0;
+float eprev_flow = 0;
+float eintegral_flow = 0;
 
 // Alarm Variables
 bool artPressureAlarm = false;
@@ -291,6 +302,14 @@ void loop() {
     startCommandLatchPrev = startCommandLatch;
     bloodPumpFaultPrev = bloodPumpFault;
     airDetectAlarmPrev = airDetectAlarm;
+
+    // PID Control
+    float dt = ((float)(currentTime - prevT))/(1.0e3); // convert from ms to s
+    prevT = currentTime;
+    int temp_PWM = PIDcontrol(TARGET_TEMP, dialTempVal_S1, dt, kp_temp, ki_temp, kd_temp, &eprev_temp, &eintegral_temp);
+    int flow_PWM = PIDcontrol(TARGET_FLOW, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, &eprev_flow, &eintegral_flow);
+
+    // TO-DO: send PWM to Slave 1, Slave 2
   }
 }
 
@@ -443,4 +462,14 @@ void printAnalogue(String description, float value, String units) {
   }
 
   Serial.println((String)description + ": " + value + " " + units);
+}
+
+int PIDcontrol(target, val, dt, kp, ki, kd, &eprev, &eintegral){
+  e = target - val;
+  float de_dt = (e - eprev)/dt;
+  eintegral = eintegral + e*dt;
+  eprev = e;
+  int u = (int) kp*e + ki*eintegral + kd*de_dt;
+  if (u < 0) return 0; // set minimum pump PWM to be zero
+  if (u > 0) return min(abs(u),255); // maximum PWM value is 255
 }
