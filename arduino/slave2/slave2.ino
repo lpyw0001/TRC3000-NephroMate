@@ -88,10 +88,11 @@ void loop() {
     dialLevelVal = analogRead(dialLevelPin);
 
     // Scale Analogue Inputs for Transmission to Master
-    waterLevelValScl = scaleInput(waterLevelVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUE
-    venTempValScl = scaleInput(venTempVal, 0, 1023, 5, 60);
+    // ** TO DO **: Verify operating scaled values
+    waterLevelValScl = scaleInput(waterLevelVal, 1013, 1023, 0, 100.0);
+    venTempValScl = scaleInput(venTempVal, 20, 358, 5, 60);
     bloodLeakValScl = bloodLeakVal; // no need for scaling, since checking against arbitrary threshold found experimentally
-    dialLevelValScl = scaleInput(dialLevelVal, 0, 1023, 12.7, 127.0); // TO DO UPDATE VALUE
+    dialLevelValScl = scaleInput(dialLevelVal, 0, 466, 0.0, 100.0); 
 
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {

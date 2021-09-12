@@ -107,11 +107,12 @@ void loop() {
     bloodFlowVal = analogRead(bloodFlowPin);
 
     // Scale Analogue Inputs for Transmission to Master
+    // ** TO DO **: Verify analogue operating values
     dialConductivityScl = scaleInput(dialConductivityVal, 0, 1023, 10.0, 30.0);
     pHScl = scaleInput(pHVal, 0, 1023, 0.0, 14.0);
-    dialTempScl = scaleInput(dialTempVal, 0, 250, 5.0, 60.0); // Max raw value is 358?? - TBC
-    bloodFlowScl = scaleInput(bloodFlowVal, 0, 1023, 0.0, 400.0); // TO DO UPDATE VALUE
-
+    dialTempScl = scaleInput(dialTempVal, 20, 358, 5.0, 60.0); 
+    bloodFlowScl = scaleInput(bloodFlowVal, 1013, 1023, 0.0, 600.0); 
+  
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
