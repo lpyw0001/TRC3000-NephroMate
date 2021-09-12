@@ -312,11 +312,11 @@ void loop() {
     airDetectAlarmPrev = airDetectAlarm;
 
     // PID Control
-    /*double dt = ((double)(currentTime - prevT))/(1.0e3); // convert from ms to s
+    double dt = ((double)(currentTime - prevT))/(1.0e3); // convert from ms to s
     prevT = currentTime;
-    int temp_PWM = PIDcontrol(TARGET_TEMP, dialTempVal_S1, dt, kp_temp, ki_temp, kd_temp, &eprev_temp, &eintegral_temp);
-    int flow_PWM = PIDcontrol(TARGET_FLOW, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, &eprev_flow, &eintegral_flow);
-    */
+    int temp_PWM = PIDcontrol(TARGET_TEMP, dialTempVal_S1, dt, kp_temp, ki_temp, kd_temp, eprev_temp, eintegral_temp);
+    int flow_PWM = PIDcontrol(TARGET_FLOW, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, eprev_flow, eintegral_flow);
+    
     // TO-DO: send PWM to Slave 1, Slave 2
   }
 }
@@ -536,12 +536,12 @@ void printAnalogue(String description, double value, String units) {
   Serial.println((String)description + ": " + value + " " + units);
 }
 
-/*int PIDcontrol(target, val,  dt, kp, ki, kd, &eprev, &eintegral){
-  e = target - val;
+int PIDcontrol(double target, double val, double dt, double kp, double ki, double kd, double &eprev, double &eintegral){
+  double e = target - val;
   double de_dt = (e - eprev)/dt;
   eintegral = eintegral + e*dt;
   eprev = e;
   int u = (int) kp*e + ki*eintegral + kd*de_dt;
   if (u < 0) return 0; // set minimum pump PWM to be zero
   if (u > 0) return min(abs(u),255); // maximum PWM value is 255
-}*/
+}
