@@ -42,7 +42,6 @@ double pHScl = 0;
 double dialTempScl = 0;
 double bloodFlowScl = 0;
 
-
 // Fault Conditions
 bool bloodPumpFault = false;
 bool clampLines = false;
@@ -60,6 +59,7 @@ Servo venousClamp;
 const int CLAMP_ANGLE = 90;
 const int CLAMP_OFF = 0;
 bool startCommand = false; // From Master
+int flow_PWM = 0;
 
 // Digital Pins
 int mixerIN1Pin = 0;
@@ -180,6 +180,7 @@ void MasterControl(int dataSize) {
   I2C_readAnything(startCommand);
   I2C_readAnything(bloodPumpFault);
   I2C_readAnything(clampLines);
+  I2C_readAnything(flow_PWM);
 }
 
 // Update Screen

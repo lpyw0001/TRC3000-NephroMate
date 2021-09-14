@@ -64,6 +64,7 @@ bool firstLoop = true;
 // Output Objects
 // include: waste pump, heparin pump, deaerator, heater
 bool startCommand = false; // From Master
+int temp_PWM = 0;
 
 // ----------- //
 // SETUP LOOP  //
@@ -125,6 +126,7 @@ void IOSend() {
 
 void MasterControl(int dataSize) {
   I2C_readAnything(startCommand);
+  I2C_readAnything(temp_PWM);
 }
 
 // Update Screen
