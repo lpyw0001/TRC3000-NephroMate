@@ -132,7 +132,9 @@ void loop() {
     digitalWrite(dialPumpIN1Pin, HIGH);
     digitalWrite(dialPumpIN2Pin, LOW);
 
-    // Blood pump PID controlled (against what?)
+    // Blood pump PID controlled
+    //int dir = (int) !bloodPumpFault;
+    //setMotor(dir, flow_PWM, flow_PWM_Pin, bloodPumpIN1Pin, bloodPumpIN2Pin); // flow_PWM_Pin to be defined
     // Currently just start/stop based on fault conditions
     if (bloodPumpFault) {
       digitalWrite(bloodPumpIN1Pin, LOW);

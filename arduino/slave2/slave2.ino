@@ -106,6 +106,9 @@ void loop() {
       cycle = !cycle;
       // dialysateClamp.write(CLAMP_OFF);
     }
+
+    // Heater PID controlled
+    //setMotor(1, temp_PWM, temp_PWM_Pin, heaterIN1Pin, heaterIN2Pin); // temp_PWM_Pin to be defined
   }
   // TO DO
   // Activate Clamp when requested by Master

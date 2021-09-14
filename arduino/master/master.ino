@@ -296,23 +296,23 @@ void loop() {
     int flow_PWM = PIDcontrol(TARGET_FLOW, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, eprev_flow, eintegral_flow);
     
     // Second Check if Emergency Stop Button has been pressed and relay stop to slave devices
-    if (!startCommandLatch) {
+    //if (!startCommandLatch) {
       Wire.beginTransmission(0x11); // slave 2
       I2C_writeAnything(startCommandLatch);
       I2C_writeAnything(temp_PWM); // heater motor PWM
       Wire.endTransmission();
-    }
+    //}
 
     // Send fault conditions to slave devices if any values have changed
     // Only one receive function so need to send all values
-    if (startCommandLatch != startCommandLatchPrev || bloodPumpFault != bloodPumpFaultPrev || airDetectAlarm != airDetectAlarmPrev) {
+    //if (startCommandLatch != startCommandLatchPrev || bloodPumpFault != bloodPumpFaultPrev || airDetectAlarm != airDetectAlarmPrev) {
       Wire.beginTransmission(0x10); // slave 1
       I2C_writeAnything(startCommandLatch);
       I2C_writeAnything(bloodPumpFault);
       I2C_writeAnything(airDetectAlarm); // Activate dialysate and venous clamps
       I2C_writeAnything(flow_PWM); // blood pump PWM
       Wire.endTransmission();
-    }
+    //}
 
     // Update Previous Values
     startCommandLatchPrev = startCommandLatch;
