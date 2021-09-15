@@ -91,6 +91,7 @@ void setup() {
   pinMode(venClampActivePin, OUTPUT);
   pinMode(mixerIN2Pin, OUTPUT);
   lcd.begin(16, 2);
+  Serial.begin(9600);
 }
 
 // ---------- //

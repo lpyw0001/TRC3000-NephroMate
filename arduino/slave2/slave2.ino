@@ -74,6 +74,7 @@ void setup() {
   Wire.onRequest(IOSend);
   Wire.onReceive(MasterControl);
   lcd.begin(16, 2);
+  Serial.begin(9600);
 }
 
 // ---------- //
@@ -106,6 +107,18 @@ void loop() {
       cycle = !cycle;
       // dialysateClamp.write(CLAMP_OFF);
     }
+
+    // Waste pump runs at a fixed speed continuously
+    digitalWrite(wastePumpIN1Pin, HIGH);
+    digitalWrite(wastePumpIN2Pin, LOW);
+
+    // Heparin pump runs at a fixed speed continuously
+    digitalWrite(heparinPumpIN1Pin, HIGH);
+    digitalWrite(heparinPumpIN2Pin, LOW);
+
+    // Deaerator pump runs at a fixed speed continuously
+    digitalWrite(deaeratorIN1Pin, HIGH);
+    digitalWrite(deaeratorIN2Pin, LOW);
 
     // Heater PID controlled
     setMotor(1, temp_PWM, heaterPWMPin, heaterIN1Pin);
