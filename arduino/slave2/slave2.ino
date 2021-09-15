@@ -65,6 +65,8 @@ bool firstLoop = true;
 // include: waste pump, heparin pump, deaerator, heater
 bool startCommand = false; // From Master
 int temp_PWM = 0;
+volatile bool wastePumpRun = false;
+volatile double hepRunTimeRemaining = 0;
 
 // ----------- //
 // SETUP LOOP  //
@@ -93,7 +95,7 @@ void loop() {
     waterLevelValScl = scaleInput(waterLevelVal, 1013, 1023, 0, 100.0);
     venTempValScl = scaleInput(venTempVal, 20, 358, 5, 60);
     bloodLeakValScl = bloodLeakVal; // no need for scaling, since checking against arbitrary threshold found experimentally
-    dialLevelValScl = scaleInput(dialLevelVal, 0, 466, 0.0, 100.0); 
+    dialLevelValScl = scaleInput(dialLevelVal, 0, 466, 0.0, 100.0);
 
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
@@ -104,16 +106,42 @@ void loop() {
       }
       prevTime = currentTime;
       cycle = !cycle;
-      // dialysateClamp.write(CLAMP_OFF);
     }
 
     // Heater PID controlled
     //setMotor(1, temp_PWM, temp_PWM_Pin, heaterIN1Pin, heaterIN2Pin); // temp_PWM_Pin to be defined
+
+    // Waste Pumps run continuously at a fixed speed unless faulted by high pressure on the waste line
+    if (wastePumpRun) { // command from master
+      digitalWrite(wastePumpIN1Pin, HIGH);
+      digitalWrite(wastePumpIN2Pin, LOW);
+    } else {
+      digitalWrite(wastePumpIN1Pin, LOW);
+      digitalWrite(wastePumpIN2Pin, LOW);
+    }
+
+    if (hepRunTimeRemaining > 0) {
+      digitalWrite(heparinPumpIN1Pin, HIGH);
+      digitalWrite(heparinPumpIN2Pin, LOW);
+    } else {
+      digitalWrite(heparinPumpIN1Pin, LOW);
+      digitalWrite(heparinPumpIN2Pin, LOW);
+    }
+
+    // Deaerator runs at a fixed speed continuously
+    digitalWrite(deaeratorIN1Pin, HIGH);
+    digitalWrite(deaeratorIN2Pin, LOW);
   }
-  // TO DO
-  // Activate Clamp when requested by Master
-  // dialysateClamp.write(CLAMP_ANGLE);
-  // TO DO
+
+  lcd.clear();
+
+  // Stop all motors
+  digitalWrite(wastePumpIN1Pin, LOW);
+  digitalWrite(wastePumpIN2Pin, LOW);
+  digitalWrite(heparinPumpIN1Pin, LOW);
+  digitalWrite(heparinPumpIN2Pin, LOW);
+  digitalWrite(deaeratorIN1Pin, LOW);
+  digitalWrite(deaeratorIN2Pin, LOW);
 }
 
 // ---------- //
@@ -130,6 +158,8 @@ void IOSend() {
 void MasterControl(int dataSize) {
   I2C_readAnything(startCommand);
   I2C_readAnything(temp_PWM);
+  I2C_readAnything(wastePumpRun);
+  I2C_readAnything(hepRunTimeRemaining);
 }
 
 // Update Screen
@@ -174,18 +204,18 @@ double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double
 }
 
 // set PWM of motor
-void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
-  analogWrite(pwm,pwmVal);
-  if(dir == 1){
-    digitalWrite(in1,HIGH);
-    digitalWrite(in2,LOW);
+void setMotor(int dir, int pwmVal, int pwm, int in1, int in2) {
+  analogWrite(pwm, pwmVal);
+  if (dir == 1) {
+    digitalWrite(in1, HIGH);
+    digitalWrite(in2, LOW);
   }
-  else if(dir == -1){
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,HIGH);
+  else if (dir == -1) {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, HIGH);
   }
-  else{
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,LOW);
-  }  
+  else {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, LOW);
+  }
 }

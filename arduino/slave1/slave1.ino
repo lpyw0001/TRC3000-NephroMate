@@ -110,9 +110,9 @@ void loop() {
     // ** TO DO **: Verify analogue operating values
     dialConductivityScl = scaleInput(dialConductivityVal, 0, 1023, 10.0, 30.0);
     pHScl = scaleInput(pHVal, 0, 1023, 0.0, 14.0);
-    dialTempScl = scaleInput(dialTempVal, 20, 358, 5.0, 60.0); 
-    bloodFlowScl = scaleInput(bloodFlowVal, 1013, 1023, 0.0, 600.0); 
-  
+    dialTempScl = scaleInput(dialTempVal, 20, 358, 5.0, 60.0);
+    bloodFlowScl = scaleInput(bloodFlowVal, 1013, 1023, 0.0, 600.0);
+
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
       if (cycle) {
@@ -139,16 +139,26 @@ void loop() {
     if (bloodPumpFault) {
       digitalWrite(bloodPumpIN1Pin, LOW);
       digitalWrite(bloodPumpIN2Pin, LOW);
+      bloodPumpRunningFB = false;
     } else {
       digitalWrite(bloodPumpIN1Pin, HIGH);
       digitalWrite(bloodPumpIN2Pin, LOW);
+      bloodPumpRunningFB = true;
     }
-
+venousClampFB
+dialysateClampFB
+bloodPumpRunningFB
     // Dialysate clamp: triggered when air is detected?
     // Venous clamp: triggered when air is detected?
     if (clampLines) {
       venousClamp.write(CLAMP_ANGLE);
       dialysateClamp.write(CLAMP_ANGLE);
+      venousClampFB = true;
+      dialysateClampFB = true;
+    }
+    else {
+      venousClamp.write(CLAMP_OFF);
+      dialysateClamp.write(CLAMP_OFF);
     }
   }
 
@@ -159,12 +169,6 @@ void loop() {
   digitalWrite(mixerIN2Pin, LOW);
   digitalWrite(dialPumpIN1Pin, LOW);
   digitalWrite(dialPumpIN2Pin, LOW);
-
-
-  // TO DO
-  // Activate Clamp when requested by Master
-  // dialysateClamp.write(CLAMP_ANGLE);
-  // TO DO
 }
 
 // ---------- //
@@ -227,18 +231,18 @@ double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double
 }
 
 // set PWM of motor
-void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
-  analogWrite(pwm,pwmVal);
-  if(dir == 1){
-    digitalWrite(in1,HIGH);
-    digitalWrite(in2,LOW);
+void setMotor(int dir, int pwmVal, int pwm, int in1, int in2) {
+  analogWrite(pwm, pwmVal);
+  if (dir == 1) {
+    digitalWrite(in1, HIGH);
+    digitalWrite(in2, LOW);
   }
-  else if(dir == -1){
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,HIGH);
+  else if (dir == -1) {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, HIGH);
   }
-  else{
-    digitalWrite(in1,LOW);
-    digitalWrite(in2,LOW);
-  }  
+  else {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, LOW);
+  }
 }
