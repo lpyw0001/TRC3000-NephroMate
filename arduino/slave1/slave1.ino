@@ -64,7 +64,7 @@ int flow_PWM = 0;
 // Digital Pins
 int mixerIN1Pin = 0;
 int bloodPumpIN2Pin = 1;
-int bloodPumpPWMPin = 6;
+int bloodPumpIN1Pin = 6;
 int dialPumpIN1Pin = 7;
 int dialPumpIN2Pin = 8;
 int dialClampActivePin = 9;
@@ -84,14 +84,13 @@ void setup() {
   Wire.onReceive(MasterControl);
   pinMode(mixerIN1Pin, OUTPUT);
   pinMode(bloodPumpIN2Pin, OUTPUT);
-  pinMode(bloodPumpPWMPin, OUTPUT);
+  pinMode(bloodPumpIN1Pin, OUTPUT);
   pinMode(dialPumpIN1Pin, OUTPUT);
   pinMode(dialPumpIN2Pin, OUTPUT);
   pinMode(dialClampActivePin, OUTPUT);
   pinMode(venClampActivePin, OUTPUT);
   pinMode(mixerIN2Pin, OUTPUT);
   lcd.begin(16, 2);
-  Serial.begin(9600);
 }
 
 // ---------- //
@@ -128,29 +127,28 @@ void loop() {
     // Mixer runs at a fixed speed continuously
     digitalWrite(mixerIN1Pin, HIGH);
     digitalWrite(mixerIN2Pin, LOW);
-
+    mixerRunningFB = true;
+    
     // Dialysate pump runs at a fixed speed continuously
     digitalWrite(dialPumpIN1Pin, HIGH);
     digitalWrite(dialPumpIN2Pin, LOW);
 
     // Blood pump PID controlled
     //int dir = (int) !bloodPumpFault;
-    setMotor(1, flow_PWM, bloodPumpPWMPin, bloodPumpIN2Pin);
-    // Start/stop based on fault conditions
-    /*if (bloodPumpFault) {
-      digitalWrite(bloodPumpPWMPin, LOW);
+    //setMotor(dir, flow_PWM, flow_PWM_Pin, bloodPumpIN1Pin, bloodPumpIN2Pin); // flow_PWM_Pin to be defined
+    // Currently just start/stop based on fault conditions
+    if (bloodPumpFault) {
+      digitalWrite(bloodPumpIN1Pin, LOW);
       digitalWrite(bloodPumpIN2Pin, LOW);
       bloodPumpRunningFB = false;
     } else {
-      digitalWrite(bloodPumpPWMPin, HIGH);
+      digitalWrite(bloodPumpIN1Pin, HIGH);
       digitalWrite(bloodPumpIN2Pin, LOW);
       bloodPumpRunningFB = true;
     }
-venousClampFB
+/*venousClampFB
 dialysateClampFB
-bloodPumpRunningFB
-    }*/
-
+bloodPumpRunningFB*/
     // Dialysate clamp: triggered when air is detected?
     // Venous clamp: triggered when air is detected?
     if (clampLines) {
@@ -172,13 +170,6 @@ bloodPumpRunningFB
   digitalWrite(mixerIN2Pin, LOW);
   digitalWrite(dialPumpIN1Pin, LOW);
   digitalWrite(dialPumpIN2Pin, LOW);
-  setMotor(0, 0, bloodPumpPWMPin, bloodPumpIN2Pin);
-
-
-  // TO DO
-  // Activate Clamp when requested by Master
-  // dialysateClamp.write(CLAMP_ANGLE);
-  // TO DO
 }
 
 // ---------- //
@@ -255,19 +246,4 @@ void setMotor(int dir, int pwmVal, int pwm, int in1, int in2) {
     digitalWrite(in1, LOW);
     digitalWrite(in2, LOW);
   }
-// pin "in2" permanently wired to LOW
-void setMotor(int dir, int pwmVal, int pwm, int in1){
-  analogWrite(pwm,pwmVal);
-  if(dir == 1){
-    digitalWrite(in1,HIGH);
-    //digitalWrite(in2,LOW);
-  }
-  /*else if(dir == -1){
-    digitalWrite(in1,LOW);
-    //digitalWrite(in2,HIGH);
-  }*/
-  else{
-    digitalWrite(in1,LOW);
-    //digitalWrite(in2,LOW);
-  }  
 }
