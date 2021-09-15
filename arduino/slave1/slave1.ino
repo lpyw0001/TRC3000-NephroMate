@@ -64,7 +64,7 @@ int flow_PWM = 0;
 // Digital Pins
 int mixerIN1Pin = 0;
 int bloodPumpIN2Pin = 1;
-int bloodPumpIN1Pin = 6;
+int bloodPumpPWMPin = 6;
 int dialPumpIN1Pin = 7;
 int dialPumpIN2Pin = 8;
 int dialClampActivePin = 9;
@@ -84,7 +84,7 @@ void setup() {
   Wire.onReceive(MasterControl);
   pinMode(mixerIN1Pin, OUTPUT);
   pinMode(bloodPumpIN2Pin, OUTPUT);
-  pinMode(bloodPumpIN1Pin, OUTPUT);
+  pinMode(bloodPumpPWMPin, OUTPUT);
   pinMode(dialPumpIN1Pin, OUTPUT);
   pinMode(dialPumpIN2Pin, OUTPUT);
   pinMode(dialClampActivePin, OUTPUT);
@@ -134,15 +134,15 @@ void loop() {
 
     // Blood pump PID controlled
     //int dir = (int) !bloodPumpFault;
-    //setMotor(dir, flow_PWM, flow_PWM_Pin, bloodPumpIN1Pin, bloodPumpIN2Pin); // flow_PWM_Pin to be defined
-    // Currently just start/stop based on fault conditions
-    if (bloodPumpFault) {
-      digitalWrite(bloodPumpIN1Pin, LOW);
+    setMotor(1, flow_PWM, bloodPumpPWMPin, bloodPumpIN2Pin);
+    // Start/stop based on fault conditions
+    /*if (bloodPumpFault) {
+      digitalWrite(bloodPumpPWMPin, LOW);
       digitalWrite(bloodPumpIN2Pin, LOW);
     } else {
-      digitalWrite(bloodPumpIN1Pin, HIGH);
+      digitalWrite(bloodPumpPWMPin, HIGH);
       digitalWrite(bloodPumpIN2Pin, LOW);
-    }
+    }*/
 
     // Dialysate clamp: triggered when air is detected?
     // Venous clamp: triggered when air is detected?
@@ -159,6 +159,7 @@ void loop() {
   digitalWrite(mixerIN2Pin, LOW);
   digitalWrite(dialPumpIN1Pin, LOW);
   digitalWrite(dialPumpIN2Pin, LOW);
+  setMotor(0, 0, bloodPumpPWMPin, bloodPumpIN2Pin);
 
 
   // TO DO
@@ -227,18 +228,19 @@ double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double
 }
 
 // set PWM of motor
-void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
+// pin "in2" permanently wired to LOW
+void setMotor(int dir, int pwmVal, int pwm, int in1){
   analogWrite(pwm,pwmVal);
   if(dir == 1){
     digitalWrite(in1,HIGH);
-    digitalWrite(in2,LOW);
+    //digitalWrite(in2,LOW);
   }
-  else if(dir == -1){
+  /*else if(dir == -1){
     digitalWrite(in1,LOW);
-    digitalWrite(in2,HIGH);
-  }
+    //digitalWrite(in2,HIGH);
+  }*/
   else{
     digitalWrite(in1,LOW);
-    digitalWrite(in2,LOW);
+    //digitalWrite(in2,LOW);
   }  
 }

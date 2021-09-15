@@ -50,7 +50,7 @@ int heparinPumpIN1Pin = 6;
 int heparinPumpIN2Pin = 7;
 int deaeratorIN1Pin = 8;
 int heaterIN1Pin = 9;
-int heaterIN2Pin = 10;
+int heaterPWMPin = 10;
 int deaeratorIN2Pin = 13;
 
 // Initialise LCD
@@ -108,12 +108,21 @@ void loop() {
     }
 
     // Heater PID controlled
-    //setMotor(1, temp_PWM, temp_PWM_Pin, heaterIN1Pin, heaterIN2Pin); // temp_PWM_Pin to be defined
+    setMotor(1, temp_PWM, heaterPWMPin, heaterIN1Pin);
   }
   // TO DO
   // Activate Clamp when requested by Master
   // dialysateClamp.write(CLAMP_ANGLE);
   // TO DO
+
+  // Stop all motors
+  digitalWrite(wastePumpIN1Pin, LOW);
+  digitalWrite(wastePumpIN2Pin, LOW);
+  digitalWrite(heparinPumpIN1Pin, LOW);
+  digitalWrite(heparinPumpIN2Pin, LOW);
+  digitalWrite(deaeratorIN1Pin, LOW);
+  digitalWrite(deaeratorIN2Pin, LOW);
+  setMotor(0, 0, heaterPWMPin, heaterIN1Pin);
 }
 
 // ---------- //
@@ -174,18 +183,19 @@ double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double
 }
 
 // set PWM of motor
-void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
+// pin "in2" permanently wired to LOW
+void setMotor(int dir, int pwmVal, int pwm, int in1){
   analogWrite(pwm,pwmVal);
   if(dir == 1){
     digitalWrite(in1,HIGH);
-    digitalWrite(in2,LOW);
+    //digitalWrite(in2,LOW);
   }
-  else if(dir == -1){
+  /*else if(dir == -1){
     digitalWrite(in1,LOW);
-    digitalWrite(in2,HIGH);
-  }
+    //digitalWrite(in2,HIGH);
+  }*/
   else{
     digitalWrite(in1,LOW);
-    digitalWrite(in2,LOW);
+    //digitalWrite(in2,LOW);
   }  
 }
