@@ -56,12 +56,21 @@ double dialConductivityVal_S1 = 0;
 double pHVal_S1 = 0;
 double dialTempVal_S1 = 0;
 double bloodFlowVal_S1 = 0;
+bool venousClampFB_S1 = false;
+bool dialysateClampFB_S1 = false;
+bool bloodPumpRunningFB_S1 = false;
+bool dialPumpRunningFB_S1 = false;
+bool mixerRunningFB_S1 = false;
 
 // From Slave 2
 double waterLevelVal_S2 = 0;
 double venTempVal_S2 = 0;
 double bloodLeakVal_S2 = 0;
 double dialLevelVal_S2 = 0;
+bool heaterRunningFB_S2 = false;
+bool wastePumpRunningFB_S2 = false;
+bool deaeratorRunningFB_S2 = false;
+bool heparinPumpRunningFB_S2 = false;
 
 // Alarm Limits
 const double PRESSURE_HIGH = 150; // TO DO update value
@@ -228,19 +237,29 @@ void loop() {
       break;
     }
 
-    // Request IO from slave 0x10 (4 x analogue values)
-    Wire.requestFrom(0x10, 16);
+    // Request IO from slave 0x10 (4 x analogue values, 5 x boolean values)
+    // ** TO DO ** CHECK SIZE OF BOOL SENT OVER I2C
+    Wire.requestFrom(0x10, 21);
     I2C_readAnything(dialConductivityVal_S1);
     I2C_readAnything(pHVal_S1);
     I2C_readAnything(dialTempVal_S1);
     I2C_readAnything(bloodFlowVal_S1);
+    I2C_readAnything(venousClampFB_S1);
+    I2C_readAnything(dialysateClampFB_S1);
+    I2C_readAnything(bloodPumpRunningFB_S1);
+    I2C_readAnything(dialPumpRunningFB_S1);
+    I2C_readAnything(mixerRunningFB_S1);
 
-    // Request IO from slave 0x11 (4 x analogue inputs)
-    Wire.requestFrom(0x11, 16);
+    // Request IO from slave 0x11 (4 x analogue inputs, 4 x boolean values)
+    Wire.requestFrom(0x11, 20);
     I2C_readAnything(waterLevelVal_S2);
     I2C_readAnything(venTempVal_S2);
     I2C_readAnything(bloodLeakVal_S2);
     I2C_readAnything(dialLevelVal_S2);
+    I2C_readAnything(heaterRunningFB_S2);
+    I2C_readAnything(wastePumpRunningFB_S2);
+    I2C_readAnything(deaeratorRunningFB_S2);
+    I2C_readAnything(heparinPumpRunningFB_S2);
 
     // Check Alarm Conditions
     artPressureAlarm = (artPressVal > PRESSURE_HIGH || artPressVal < PRESSURE_LOW);
@@ -303,25 +322,25 @@ void loop() {
     int flow_PWMPrev;
 
     // Second Check if Emergency Stop Button has been pressed and relay stop to slave devices
-    if (startCommandLatch != startCommandLatchPrev || wastePressureAlarm != wastePressureAlarmPrev || temp_PWM != temp_PWMPrev ) {
-      Wire.beginTransmission(0x11); // slave 2
-      I2C_writeAnything(startCommandLatch);
-      I2C_writeAnything(temp_PWM); // heater motor PWM
-      I2C_writeAnything(wastePressureAlarm);
-      I2C_writeAnything(hepRunTimeRemaining);
-      Wire.endTransmission();
-    }
+    // if (startCommandLatch != startCommandLatchPrev || wastePressureAlarm != wastePressureAlarmPrev || temp_PWM != temp_PWMPrev ) {
+    Wire.beginTransmission(0x11); // slave 2
+    I2C_writeAnything(startCommandLatch);
+    I2C_writeAnything(temp_PWM); // heater motor PWM
+    I2C_writeAnything(wastePressureAlarm);
+    I2C_writeAnything(hepRunTimeRemaining);
+    Wire.endTransmission();
+    //}
 
     // Send fault conditions to slave devices if any values have changed
     // Only one receive function so need to send all values
-    //if (startCommandLatch != startCommandLatchPrev || bloodPumpFault != bloodPumpFaultPrev || airDetectAlarm != airDetectAlarmPrev || flow_PWM!=flow_PWMPrev) {
-    Wire.beginTransmission(0x10); // slave 1
-    I2C_writeAnything(startCommandLatch);
-    I2C_writeAnything(bloodPumpFault);
-    I2C_writeAnything(airDetectAlarm); // Activate dialysate and venous clamps
-    I2C_writeAnything(flow_PWM); // blood pump PWM
-    Wire.endTransmission();
-    //}
+    if (startCommandLatch != startCommandLatchPrev || bloodPumpFault != bloodPumpFaultPrev || airDetectAlarm != airDetectAlarmPrev || flow_PWM != flow_PWMPrev) {
+      Wire.beginTransmission(0x10); // slave 1
+      I2C_writeAnything(startCommandLatch);
+      I2C_writeAnything(bloodPumpFault);
+      I2C_writeAnything(airDetectAlarm); // Activate dialysate and venous clamps
+      I2C_writeAnything(flow_PWM); // blood pump PWM
+      Wire.endTransmission();
+    }
 
     // Update Previous Values
     startCommandLatchPrev = startCommandLatch;

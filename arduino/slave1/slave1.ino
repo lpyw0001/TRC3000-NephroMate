@@ -46,6 +46,12 @@ double bloodFlowScl = 0;
 bool bloodPumpFault = false;
 bool clampLines = false;
 
+bool venousClampFB = false;
+bool dialysateClampFB = false;
+bool bloodPumpRunningFB = false;
+bool dialPumpRunningFB = false;
+bool mixerRunningFB = false;
+
 // Initialise LCD
 LiquidCrystal lcd(12, 13, 2, 3, 4, 5); // (rs,enable,d4,d5,d6,d7)
 unsigned long currentTime;
@@ -128,10 +134,11 @@ void loop() {
     digitalWrite(mixerIN1Pin, HIGH);
     digitalWrite(mixerIN2Pin, LOW);
     mixerRunningFB = true;
-    
+
     // Dialysate pump runs at a fixed speed continuously
     digitalWrite(dialPumpIN1Pin, HIGH);
     digitalWrite(dialPumpIN2Pin, LOW);
+    dialPumpRunningFB = true;
 
     // Blood pump PID controlled
     //int dir = (int) !bloodPumpFault;
@@ -146,9 +153,7 @@ void loop() {
       digitalWrite(bloodPumpIN2Pin, LOW);
       bloodPumpRunningFB = true;
     }
-/*venousClampFB
-dialysateClampFB
-bloodPumpRunningFB*/
+
     // Dialysate clamp: triggered when air is detected?
     // Venous clamp: triggered when air is detected?
     if (clampLines) {
@@ -170,6 +175,15 @@ bloodPumpRunningFB*/
   digitalWrite(mixerIN2Pin, LOW);
   digitalWrite(dialPumpIN1Pin, LOW);
   digitalWrite(dialPumpIN2Pin, LOW);
+  digitalWrite(bloodPumpIN1Pin, LOW);
+  digitalWrite(bloodPumpIN2Pin, LOW);
+  venousClamp.write(CLAMP_ANGLE); // clamp lines if not running as a safety precaution
+  dialysateClamp.write(CLAMP_ANGLE);
+  venousClampFB = false;
+  dialysateClampFB = false;
+  bloodPumpRunningFB = false;
+  dialPumpRunningFB = false;
+  mixerRunningFB = false;
 }
 
 // ---------- //
@@ -181,6 +195,11 @@ void IOSend() {
   I2C_writeAnything(pHScl);
   I2C_writeAnything(dialTempScl);
   I2C_writeAnything(bloodFlowScl);
+  I2C_writeAnything(venousClampFB);
+  I2C_writeAnything(dialysateClampFB);
+  I2C_writeAnything(bloodPumpRunningFB);
+  I2C_writeAnything(dialPumpRunningFB);
+  I2C_writeAnything(mixerRunningFB);
 }
 
 void MasterControl(int dataSize) {
