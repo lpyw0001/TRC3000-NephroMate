@@ -57,7 +57,7 @@ double pHVal_S1 = 0;
 double dialTempVal_S1 = 0;
 double bloodFlowVal_S1 = 0;
 bool venousClampFB_S1 = false;
-bool dialysateClampFB_S1 = false;
+bool bypassValveFB_S1 = false;
 bool bloodPumpRunningFB_S1 = false;
 bool dialPumpRunningFB_S1 = false;
 bool mixerRunningFB_S1 = false;
@@ -96,6 +96,8 @@ const double kd_temp = 0;
 const double kp_flow = 1;
 const double ki_flow = 0;
 const double kd_flow = 0;
+int flow_PWM;
+int temp_PWM;
 long prevT = 0;
 double eprev_temp = 0;
 double eintegral_temp = 0;
@@ -245,7 +247,7 @@ void loop() {
     I2C_readAnything(dialTempVal_S1);
     I2C_readAnything(bloodFlowVal_S1);
     I2C_readAnything(venousClampFB_S1);
-    I2C_readAnything(dialysateClampFB_S1);
+    I2C_readAnything(bypassValveFB_S1);
     I2C_readAnything(bloodPumpRunningFB_S1);
     I2C_readAnything(dialPumpRunningFB_S1);
     I2C_readAnything(mixerRunningFB_S1);
@@ -307,7 +309,7 @@ void loop() {
         serialPrintValuesStatus();
       } else {
         displayUpdateValue("Ven Press", venPressVal, "Wst Press", wastePressVal);
-        //serialPrintValues();
+        serialPrintDeviceStatus
       }
       prevTime = currentTime;
       cycle = !cycle;
@@ -316,8 +318,8 @@ void loop() {
     // PID Control
     double dt = ((double)(currentTime - prevT)) / (1.0e3); // convert from ms to s
     prevT = currentTime;
-    int temp_PWM = PIDcontrol(TARGET_TEMP, dialTempVal_S1, dt, kp_temp, ki_temp, kd_temp, eprev_temp, eintegral_temp);
-    int flow_PWM = PIDcontrol(TARGET_FLOW, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, eprev_flow, eintegral_flow);
+    temp_PWM = PIDcontrol(TARGET_TEMP, dialTempVal_S1, dt, kp_temp, ki_temp, kd_temp, eprev_temp, eintegral_temp);
+    flow_PWM = PIDcontrol(TARGET_FLOW, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, eprev_flow, eintegral_flow);
     int temp_PWMPrev;
     int flow_PWMPrev;
 
@@ -468,6 +470,15 @@ void serialPrintValuesStatus() {
   printAnalogueStatus("Blood Leak Detector", bloodLeakVal_S2, "", alarmState(bloodLeakAlarm));
   printAnalogueStatus("Dialysate Level", dialLevelVal_S2, " % ", alarmState(dialLevelAlarm));
 }
+
+void serialPrintDeviceStatus() {
+  //DESCRIPTION | SPEED || RUN STATE
+  printAnalogueStatus("Mixer", mixerRunningFB_S1 * 100, "%", motorState(mixerRunningFB_S1));
+  printAnalogueStatus("Blood Pump", scaleInput(flow_PWM, 0, 255, 0, 100), "%", motorState(bloodPumpRunningFB_S1));
+  printAnalogueStatus("Dialysate Pump", dialPumpRunningFB_S1* 100, "%", motorState(dialPumpRunningFB_S1));
+  printAnalogueStatus("Bypass Valve", bypassValveFB_S1 * 100, "%", valveState(bypassValveFB_S1));
+  printAnalogueStatus("Venous Clamp", venousClampFB_S1 * 100, "%", servoState(venousClampFB_S1));
+}
 /*
   void serialPrintValue() {
   Serial.println("\n **** BLOOD CIRCUIT ****");
@@ -489,6 +500,18 @@ void serialPrintValuesStatus() {
 */
 String alarmState(bool state) {
   return (state) ? "Alarm" : "Normal";
+}
+
+String servoState(bool state) {
+  return (state) ? "Off" : "Active";
+}
+
+String valveState(bool state) {
+  return (state) ? "Closed" : "Open";
+}
+
+String motorState(bool state) {
+  return (state) ? "Off" : "Running";
 }
 
 void printStatus(String description, String state) {
@@ -556,7 +579,6 @@ void printAnalogue(String description, double value, String units) {
     return;
   }
   unsigned int strDescLen = description.length();
-
 
   // Append trailing spaces for alignment
   if (24 - strDescLen > 0) {

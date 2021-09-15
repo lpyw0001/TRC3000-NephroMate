@@ -49,7 +49,7 @@ int wastePumpIN2Pin = 1;
 int heparinPumpIN1Pin = 6;
 int heparinPumpIN2Pin = 7;
 int deaeratorIN1Pin = 8;
-int heaterIN1Pin = 9;
+int heaterPWMPin = 9;
 int heaterIN2Pin = 10;
 int deaeratorIN2Pin = 13;
 
@@ -114,7 +114,7 @@ void loop() {
     }
 
     // Heater PID controlled
-    //setMotor(1, temp_PWM, temp_PWM_Pin, heaterIN1Pin, heaterIN2Pin); // temp_PWM_Pin to be defined
+ //    heaterRunningFB = setMotor(1, temp_PWM, temp_PWM_Pin, heaterIN1Pin, heaterIN2Pin); // temp_PWM_Pin to be defined
 
     // Waste Pumps run continuously at a fixed speed unless faulted by high pressure on the waste line
     if (wastePumpRun) { // command from master
@@ -153,8 +153,7 @@ void loop() {
   digitalWrite(heparinPumpIN2Pin, LOW);
   digitalWrite(deaeratorIN1Pin, LOW);
   digitalWrite(deaeratorIN2Pin, LOW);
-  digitalWrite(heaterIN1Pin, LOW);
-  digitalWrite(heaterIN2Pin, LOW);
+  setMotor(0, 0, heaterPWMPin, heaterIN2Pin);
   
   heaterRunningFB = false;
   wastePumpRunningFB = false;
@@ -225,21 +224,20 @@ double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double
   return ((scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + scaledMin;
 }
 
-// set PWM of motor
-void setMotor(int dir, int pwmVal, int pwm, int in1, int in2) {
-  analogWrite(pwm, pwmVal);
-  if (dir == 1) {
-    digitalWrite(in1, HIGH);
-    digitalWrite(in2, LOW);
-     
+// pin "in2" permanently wired to LOW
+bool setMotor(int dir, int pwmVal, int pwm, int in1){
+  analogWrite(pwm,pwmVal);
+  if(dir == 1){
+    digitalWrite(in1,HIGH);
+    //digitalWrite(in2,LOW);
   }
-  else if (dir == -1) {
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, HIGH);
-     
-  }
-  else {
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, LOW);
-  }
+  /*else if(dir == -1){
+    digitalWrite(in1,LOW);
+    //digitalWrite(in2,HIGH);
+  }*/
+  else{
+    digitalWrite(in1,LOW);
+    //digitalWrite(in2,LOW);
+  }  
+   return (pwm > 0 && dir==1);
 }

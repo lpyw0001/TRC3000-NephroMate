@@ -47,7 +47,7 @@ bool bloodPumpFault = false;
 bool clampLines = false;
 
 bool venousClampFB = false;
-bool dialysateClampFB = false;
+bool bypassValveFB = false;
 bool bloodPumpRunningFB = false;
 bool dialPumpRunningFB = false;
 bool mixerRunningFB = false;
@@ -60,7 +60,7 @@ unsigned long cyclePeriod = 100; // time in ms to alternate the screen values
 bool cycle = true;
 
 // Output Objects
-Servo dialysateClamp;
+Servo bypassValve;
 Servo venousClamp;
 const int CLAMP_ANGLE = 90;
 const int CLAMP_OFF = 0;
@@ -70,7 +70,7 @@ int flow_PWM = 0;
 // Digital Pins
 int mixerIN1Pin = 0;
 int bloodPumpIN2Pin = 1;
-int bloodPumpIN1Pin = 6;
+int bloodPumpPWMPin = 6;
 int dialPumpIN1Pin = 7;
 int dialPumpIN2Pin = 8;
 int dialClampActivePin = 9;
@@ -83,14 +83,14 @@ int mixerIN2Pin = 11;
 void setup() {
   Wire.begin(0x10); // join I2C bus as slave with address 0x10
   Wire.onRequest(IOSend);
-  dialysateClamp.write(0);
-  dialysateClamp.attach(9);
+  bypassValve.write(0);
+  bypassValve.attach(9);
   venousClamp.write(0);
   venousClamp.attach(10);
   Wire.onReceive(MasterControl);
   pinMode(mixerIN1Pin, OUTPUT);
   pinMode(bloodPumpIN2Pin, OUTPUT);
-  pinMode(bloodPumpIN1Pin, OUTPUT);
+  pinMode(bloodPumpPWMPin, OUTPUT);
   pinMode(dialPumpIN1Pin, OUTPUT);
   pinMode(dialPumpIN2Pin, OUTPUT);
   pinMode(dialClampActivePin, OUTPUT);
@@ -141,30 +141,30 @@ void loop() {
     dialPumpRunningFB = true;
 
     // Blood pump PID controlled
-    //int dir = (int) !bloodPumpFault;
-    //setMotor(dir, flow_PWM, flow_PWM_Pin, bloodPumpIN1Pin, bloodPumpIN2Pin); // flow_PWM_Pin to be defined
+    int dir = (int) !bloodPumpFault;
+    bloodPumpRunningFB = setMotor(dir, flow_PWM, bloodPumpPWMPin, bloodPumpIN2Pin); // flow_PWM_Pin to be defined
     // Currently just start/stop based on fault conditions
-    if (bloodPumpFault) {
+    /*if (bloodPumpFault) {
       digitalWrite(bloodPumpIN1Pin, LOW);
       digitalWrite(bloodPumpIN2Pin, LOW);
       bloodPumpRunningFB = false;
-    } else {
+      } else {
       digitalWrite(bloodPumpIN1Pin, HIGH);
       digitalWrite(bloodPumpIN2Pin, LOW);
       bloodPumpRunningFB = true;
-    }
+      }*/
 
     // Dialysate clamp: triggered when air is detected?
     // Venous clamp: triggered when air is detected?
     if (clampLines) {
       venousClamp.write(CLAMP_ANGLE);
-      dialysateClamp.write(CLAMP_ANGLE);
+      bypassValve.write(CLAMP_ANGLE);
       venousClampFB = true;
-      dialysateClampFB = true;
+      bypassValveFB = true;
     }
     else {
       venousClamp.write(CLAMP_OFF);
-      dialysateClamp.write(CLAMP_OFF);
+      bypassValve.write(CLAMP_OFF);
     }
   }
 
@@ -175,12 +175,11 @@ void loop() {
   digitalWrite(mixerIN2Pin, LOW);
   digitalWrite(dialPumpIN1Pin, LOW);
   digitalWrite(dialPumpIN2Pin, LOW);
-  digitalWrite(bloodPumpIN1Pin, LOW);
-  digitalWrite(bloodPumpIN2Pin, LOW);
+  setMotor(0, 0, bloodPumpPWMPin, bloodPumpIN2Pin);
   venousClamp.write(CLAMP_ANGLE); // clamp lines if not running as a safety precaution
-  dialysateClamp.write(CLAMP_ANGLE);
+  bypassValve.write(CLAMP_ANGLE);
   venousClampFB = false;
-  dialysateClampFB = false;
+  bypassValveFB = false;
   bloodPumpRunningFB = false;
   dialPumpRunningFB = false;
   mixerRunningFB = false;
@@ -196,7 +195,7 @@ void IOSend() {
   I2C_writeAnything(dialTempScl);
   I2C_writeAnything(bloodFlowScl);
   I2C_writeAnything(venousClampFB);
-  I2C_writeAnything(dialysateClampFB);
+  I2C_writeAnything(bypassValveFB);
   I2C_writeAnything(bloodPumpRunningFB);
   I2C_writeAnything(dialPumpRunningFB);
   I2C_writeAnything(mixerRunningFB);
@@ -251,18 +250,21 @@ double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double
 }
 
 // set PWM of motor
-void setMotor(int dir, int pwmVal, int pwm, int in1, int in2) {
+// pin in2 permanently wired to LOW
+bool setMotor(int dir, int pwmVal, int pwm, int in1) {
   analogWrite(pwm, pwmVal);
   if (dir == 1) {
     digitalWrite(in1, HIGH);
-    digitalWrite(in2, LOW);
+    //digitalWrite(in2,LOW);
   }
-  else if (dir == -1) {
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, HIGH);
-  }
+  /*else if(dir == -1){
+    digitalWrite(in1,LOW);
+    //digitalWrite(in2,HIGH);
+    }*/
   else {
     digitalWrite(in1, LOW);
-    digitalWrite(in2, LOW);
+    //digitalWrite(in2,LOW);
   }
+
+  return (pwm > 0 && dir == 1);
 }
