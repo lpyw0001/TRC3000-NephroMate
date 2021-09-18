@@ -134,10 +134,12 @@ unsigned long prevTime = 0;
 double runTimeRemaining = 0;
 unsigned long cyclePeriod = 100; // time in ms to alternate the screen values (note 100ms in tinkercad =/= 100ms real time)
 unsigned long runTime = 4000; // time in ms to perform hemodialysis (refer comment above) (4000)
-unsigned long hepRunTime = 0; // Duration to run Heparin infusion (200)
+unsigned long hepRunTime = 1000; // Duration to run Heparin infusion (200)
 double hepRunTimeRemaining = 0;
 bool cycle = true; // alternate values displayed on LCD screen and in serial monitor
 bool firstLoop = true;
+int cycleState = 0;
+bool finished = false;
 
 // ----------- //
 // SETUP LOOP  //
@@ -306,10 +308,12 @@ void loop() {
       if (cycle) {
         displayUpdateValue("Art Press", artPressVal, "Inf Press", dialPressVal);
         //serialPrintStatus();
-        serialPrintValuesStatus();
+        //serialPrintValuesStatus();
+        printStatus();
       } else {
         displayUpdateValue("Ven Press", venPressVal, "Wst Press", wastePressVal);
-        serialPrintDeviceStatus
+        //serialPrintDeviceStatus();
+        //printDevices();
       }
       prevTime = currentTime;
       cycle = !cycle;
@@ -351,6 +355,11 @@ void loop() {
     wastePressureAlarmPrev = wastePressureAlarm;
     temp_PWMPrev = temp_PWM;
     flow_PWMPrev = flow_PWM;
+  }
+
+  if (currentTime > runTime && !finished) {
+    Serial.println("\nHaemodialysis complete\n");
+    finished = true;
   }
 }
 
@@ -415,7 +424,7 @@ void displayUpdateString(String text1, String text2, bool clear) {
 }
 
 // Scale Analogue Input  //
-// doubleing point version of the map() function
+// floating point version of the map() function
 // y = ((y2-y1/(x2-x1))*(x-x1)+y1
 // x1,x2 are the input min/max
 // y1,y2 are the output min/max
@@ -424,111 +433,9 @@ void displayUpdateString(String text1, String text2, bool clear) {
 double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double scaledMax) {
   return ((scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + scaledMin;
 }
-/*
-  void serialPrintStatus() {
-  // Device run state, speed, alarms, runtime remaing
-  Serial.println("\n **** RUNTIME ****");
-  printAnalogue("Runtime remaining", runTimeRemaining, "min");
 
-  Serial.println("\n **** BLOOD CIRCUIT ****");
-  printStatus("Arterial Pressure", alarmState(artPressureAlarm));
-  printStatus("Venous Pressure: ", alarmState(venPressAlarm));
-  printStatus("Blood Flow Rate: ", alarmState(bloodFlowAlarm));
-  printStatus("Venous Temp: ", alarmState(venTempAlarm));
-  printStatus("Air Detector: ", alarmState(airDetectAlarm));
-  //Serial.println("Blood pump: ");
-
-  Serial.println("\n **** DIALYSATE CIRCUIT ****");
-  printStatus("Dialysate Pressure", alarmState(dialPressAlarm));
-  printStatus("Waste Pressure", alarmState(wastePressAlarm));
-  printStatus("Dialysate Conductivity", alarmState(dialConductivityAlarm));
-  printStatus("pH", alarmState(pHAlarm));
-  printStatus("Dialysate Temp", alarmState(dialTempAlarm));
-  printStatus("Water Level", alarmState(waterLevelAlarm));
-  printStatus("Blood Leak", alarmState(bloodLeakAlarm));
-  printStatus("Dialysate Level", alarmState(dialLevelAlarm));
-  }*/
-
-void serialPrintValuesStatus() {
-  // Device run state, speed, alarms, runtime remaing
-  Serial.println("\n              **** RUNTIME ****");
-  printAnalogue("Runtime remaining", runTimeRemaining, "min");
-  printAnalogue("Heparin time remaining", hepRunTimeRemaining, "min");
-  Serial.println("\n              **** BLOOD CIRCUIT ****");
-  printAnalogueStatus("Arterial Pressure", artPressVal, "mmHg", alarmState(artPressureAlarm));
-  printAnalogueStatus("Venous Pressure", venPressVal, "mmHg", alarmState(venPressAlarm));
-  printAnalogueStatus("Blood Flow Rate", bloodFlowVal_S1, "mL/min", alarmState(bloodFlowAlarm));
-  printAnalogueStatus("Venous Temperature", venTempVal_S2, "°C", alarmState(venTempAlarm));
-
-  Serial.println("\n              **** DIALYSATE CIRCUIT ****");
-  printAnalogueStatus("Dialysate Pressure", dialPressVal, "mmHg", alarmState(dialPressAlarm));
-  printAnalogueStatus("Waste Pressure", wastePressVal, "mmHg", alarmState(wastePressAlarm));
-  printAnalogueStatus("Dialysate Conductivity", dialConductivityVal_S1, "mS/cm", alarmState(dialConductivityAlarm));
-  printAnalogueStatus("Dialysate Temperature", dialTempVal_S1, "°C", alarmState(dialTempAlarm));
-  printAnalogueStatus("pH", pHVal_S1, "pH", alarmState(pHAlarm));
-  printAnalogueStatus("Water Level", waterLevelVal_S2, " % ", alarmState(waterLevelAlarm));
-  printAnalogueStatus("Blood Leak Detector", bloodLeakVal_S2, "", alarmState(bloodLeakAlarm));
-  printAnalogueStatus("Dialysate Level", dialLevelVal_S2, " % ", alarmState(dialLevelAlarm));
-}
-
-void serialPrintDeviceStatus() {
-  //DESCRIPTION | SPEED || RUN STATE
-  printAnalogueStatus("Mixer", mixerRunningFB_S1 * 100, "%", motorState(mixerRunningFB_S1));
-  printAnalogueStatus("Blood Pump", scaleInput(flow_PWM, 0, 255, 0, 100), "%", motorState(bloodPumpRunningFB_S1));
-  printAnalogueStatus("Dialysate Pump", dialPumpRunningFB_S1* 100, "%", motorState(dialPumpRunningFB_S1));
-  printAnalogueStatus("Bypass Valve", bypassValveFB_S1 * 100, "%", valveState(bypassValveFB_S1));
-  printAnalogueStatus("Venous Clamp", venousClampFB_S1 * 100, "%", servoState(venousClampFB_S1));
-}
-/*
-  void serialPrintValue() {
-  Serial.println("\n **** BLOOD CIRCUIT ****");
-  printAnalogueStatus("Arterial Pressure", artPressVal, "mmHg");
-  printAnalogueStatus("Venous Pressure", venPressVal, "mmHg");
-  printAnalogueStatus("Blood Flow Rate", bloodFlowVal_S1, "mL/min");
-  printAnalogueStatus("Venous Temperature", venTempVal_S2, "°C");
-
-  Serial.println("\n **** DIALYSATE CIRCUIT ****");
-  printAnalogueStatus("Dialysate Pressure", dialPressVal, "mmHg");
-  printAnalogueStatus("Waste Pressure", wastePressVal, "mmHg");
-  printAnalogueStatus("Dialysate Conductivity", dialConductivityVal_S1, "mS/cm");
-  printAnalogueStatus("Dialysate Temperature", dialTempVal_S1, "°C");
-  printAnalogueStatus("pH", pHVal_S1, "pH");
-  printAnalogueStatus("Water Level", waterLevelVal_S2, " % ");
-  printAnalogueStatus("Blood Leak Detector", bloodLeakVal_S2, "");
-  printAnalogueStatus("Dialysate Level", dialLevelVal_S2, " % ");
-  }
-*/
 String alarmState(bool state) {
   return (state) ? "Alarm" : "Normal";
-}
-
-String servoState(bool state) {
-  return (state) ? "Off" : "Active";
-}
-
-String valveState(bool state) {
-  return (state) ? "Closed" : "Open";
-}
-
-String motorState(bool state) {
-  return (state) ? "Off" : "Running";
-}
-
-void printStatus(String description, String state) {
-  // Check if E-Stop pressed
-  if (!startCommandLatch) {
-    return;
-  }
-  unsigned int strLen = description.length();
-
-  // Append trailing spaces for alignment
-  if (24 - strLen > 0) {
-    for (int i = 0; i < (24 - strLen); i++) {
-      description += " ";
-    }
-  }
-
-  Serial.println(description + ": " + state);
 }
 
 void printAnalogueStatus(String description, double value, String units, String state) {
@@ -590,7 +497,19 @@ void printAnalogue(String description, double value, String units) {
   Serial.println((String)description + ": " + value + " " + units);
 }
 
-int PIDcontrol(double target, double val, double dt, double kp, double ki, double kd, double &eprev, double &eintegral) {
+String servoState(bool state) {
+  return (state) ? "Active" : "Off";
+}
+
+String valveState(bool state) {
+  return (state) ? "Open" : "Closed";
+}
+
+String motorState(bool state) {
+  return (state) ? "Running" : "Off";
+}
+
+int PIDcontrol(double target, double val, double dt, double kp, double ki, double kd, double & eprev, double & eintegral) {
   double e = target - val;
   double de_dt = (e - eprev) / dt;
   eintegral = eintegral + e * dt;
@@ -598,4 +517,58 @@ int PIDcontrol(double target, double val, double dt, double kp, double ki, doubl
   int u = (int) kp * e + ki * eintegral + kd * de_dt;
   if (u < 0) return 0; // set minimum pump PWM to be zero
   if (u > 0) return min(abs(u), 255); // maximum PWM value is 255
+}
+void state0() {
+  Serial.println("\n              **** RUNTIME ****");
+  printAnalogue("Runtime remaining", runTimeRemaining, "min");
+  printAnalogue("Heparin time remaining", hepRunTimeRemaining, "min");
+}
+
+void state1() {
+  Serial.println("\n              **** BLOOD CIRCUIT ****");
+  printAnalogueStatus("Arterial Pressure", artPressVal, "mmHg", alarmState(artPressureAlarm));
+  printAnalogueStatus("Venous Pressure", venPressVal, "mmHg", alarmState(venPressAlarm));
+  printAnalogueStatus("Blood Flow Rate", bloodFlowVal_S1, "mL/min", alarmState(bloodFlowAlarm));
+  printAnalogueStatus("Venous Temperature", venTempVal_S2, "\xB0""C", alarmState(venTempAlarm));
+}
+
+void state2() {
+  Serial.println("\n              **** DIALYSATE CIRCUIT ****");
+  printAnalogueStatus("Dialysate Pressure", dialPressVal, "mmHg", alarmState(dialPressAlarm));
+  printAnalogueStatus("Waste Pressure", wastePressVal, "mmHg", alarmState(wastePressAlarm));
+  printAnalogueStatus("Dialysate Conductivity", dialConductivityVal_S1, "mS/cm", alarmState(dialConductivityAlarm));
+  printAnalogueStatus("Dialysate Temperature", dialTempVal_S1, "\xB0""C", alarmState(dialTempAlarm));
+  printAnalogueStatus("pH", pHVal_S1, "pH", alarmState(pHAlarm));
+  printAnalogueStatus("Water Level", waterLevelVal_S2, " % ", alarmState(waterLevelAlarm));
+  printAnalogueStatus("Blood Leak Detector", bloodLeakVal_S2, "", alarmState(bloodLeakAlarm));
+  printAnalogueStatus("Dialysate Level", dialLevelVal_S2, " % ", alarmState(dialLevelAlarm));
+}
+
+void state3() {
+  Serial.println("\n              **** DEVICES STATUS ****");
+  printAnalogueStatus("Mixer", (mixerRunningFB_S1 * 100), "%", motorState(mixerRunningFB_S1));
+  printAnalogueStatus("Blood Pump", (map(flow_PWM, 0, 255, 0, 100)), "%", motorState(bloodPumpRunningFB_S1));
+  printAnalogueStatus("Dialysate Pump", (dialPumpRunningFB_S1 * 100), "%", motorState(dialPumpRunningFB_S1));
+  printAnalogueStatus("Bypass Valve", (bypassValveFB_S1 * 100), "%", valveState(bypassValveFB_S1));
+  printAnalogueStatus("Venous Clamp", (venousClampFB_S1 * 100), "%", servoState(venousClampFB_S1));
+}
+void printStatus() {
+  if (cycleState == 0) {
+    state0();
+    cycleState++;
+  }
+
+  else if (cycleState == 1) {
+    state1();
+    cycleState++;
+  }
+
+  else if (cycleState == 2) {
+    state2();
+    cycleState++;
+  }
+  else if (cycleState == 3) {
+    state3();
+    cycleState = 0;
+  }
 }
