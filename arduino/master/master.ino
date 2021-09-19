@@ -73,19 +73,19 @@ bool deaeratorRunningFB_S2 = false;
 bool heparinPumpRunningFB_S2 = false;
 
 // Alarm Limits
-const double PRESSURE_HIGH = 150; // TO DO update value
-const double PRESSURE_LOW = -250; // TO DO update value
-const double LEVEL_LOW = 10;
-const double TEMP_LOW = 36;
-const double TEMP_HIGH = 42;
-const double CONDUCTIVITY_LOW = 12;
-const double CONDUCTIVITY_HIGH = 16;
+const int PRESSURE_HIGH = 150; // TO DO update value
+const int PRESSURE_LOW = -230; // TO DO update value
+const int LEVEL_LOW = 10;
+const int TEMP_LOW = 36;
+const int TEMP_HIGH = 42;
+const int CONDUCTIVITY_LOW = 12;
+const int CONDUCTIVITY_HIGH = 16;
 const double PH_LOW = 6.8;
 const double PH_HIGH = 7.6;
-const double AIR_DETECT = 2000; // TO DO update value
-const double FLOW_HIGH = 500;
-const double FLOW_LOW = 200;
-const double BLOOD_LEAK = 1000; // TO DO update value
+const int AIR_DETECT = 2000; // TO DO update value
+const int FLOW_HIGH = 500;
+const int FLOW_LOW = 200;
+const int BLOOD_LEAK = 1000; // TO DO update value
 
 // PID Constants & variables
 const double TARGET_TEMP = 37; // target temperature (degrees Celsius) for dialysate solution
@@ -132,15 +132,15 @@ String tempPrinting = "";
 unsigned long currentTime = 0;
 unsigned long prevTime = 0;
 double runTimeRemaining = 0;
-unsigned long cyclePeriod = 100; // time in ms to alternate the screen values (note 100ms in tinkercad =/= 100ms real time)
+unsigned long cyclePeriod = 50; // time in ms to alternate the screen values (note 100ms in tinkercad =/= 100ms real time)
 unsigned long runTime = 4000; // time in ms to perform hemodialysis (refer comment above) (4000)
 unsigned long hepRunTime = 1000; // Duration to run Heparin infusion (200)
 double hepRunTimeRemaining = 0;
-bool cycle = true; // alternate values displayed on LCD screen and in serial monitor
+int cycle = 0; // alternate values displayed on LCD screen and in serial monitor
 bool firstLoop = true;
 int cycleState = 0;
 bool finished = false;
-
+int lcdCycleState = 0;
 // ----------- //
 // SETUP LOOP  //
 // ----------- //
@@ -162,15 +162,10 @@ void setup() {
 // MAIN LOOP  //
 // ---------- //
 void loop() {
-
-
   /*while(Serial.available()==0){
     // Collect user input
     }
-
-
     Serial.print("\nEnter heparin pump runtime (min): ");
-
     while(Serial.available()==0){
     // Collect user input
     }
@@ -207,6 +202,7 @@ void loop() {
       I2C_writeAnything(startCommandLatch);
       Wire.endTransmission();
       Serial.println("\nHaemodialysis started\n");
+      displayUpdateString("Haemodialysis", "machine running", 1);
     }
 
     // Check for Air in the line
@@ -226,7 +222,7 @@ void loop() {
     // Scale Analogue Inputs
     // ** TO DO **: Verify operating scaled values
     artPressVal = scaleInput(artPressVal, 0, 466, -300.0, -30.0);
-    dialPressVal = scaleInput(dialPressVal, 0, 466, 50.0, 250.0);
+    dialPressVal = scaleInput(dialPressVal, 0, 466, 0, 400.0);
     venPressVal = scaleInput(venPressVal, 0, 466, 50.0, 250.0);
     wastePressVal = scaleInput(wastePressVal, 0, 466, 0, 400.0);
 
@@ -301,22 +297,40 @@ void loop() {
 
     // Update Display
     currentTime = millis();
-    runTimeRemaining = (runTime - currentTime) / 18; // arbitrary scaling to return a reasonable value
-    hepRunTimeRemaining = (hepRunTime - currentTime) / 18;
+    runTimeRemaining = (runTime > currentTime) ? (runTime - currentTime) / 12 : 0; // arbitrary scaling to return a reasonable value
+    hepRunTimeRemaining = (hepRunTime > currentTime) ? (hepRunTime - currentTime) / 12 : 0;
 
     if (currentTime - prevTime > cyclePeriod) {
-      if (cycle) {
-        displayUpdateValue("Art Press", artPressVal, "Inf Press", dialPressVal);
-        //serialPrintStatus();
-        //serialPrintValuesStatus();
-        printStatus();
-      } else {
-        displayUpdateValue("Ven Press", venPressVal, "Wst Press", wastePressVal);
-        //serialPrintDeviceStatus();
-        //printDevices();
-      }
+      printStatus();
+      // Removed IO monitoring on LCD screen due to tinkercad behaving like tinkercad
+      /*
+        if (cycle < 10) {
+
+        cycle++;
+        }
+        else if (cycle == 10) {
+
+
+        // Note reduced number of cycles (not all IO) due to limited sketch size in Tinkercad (smaller than actual Arduino)
+        if (lcdCycleState == 0) {
+         displayUpdateValue("Ven Press", venPressVal, "Dial Press", dialPressVal);
+         lcdCycleState++;
+        }
+        else if (lcdCycleState == 1) {
+         displayUpdateValue("Art Press", artPressVal, "Dial Cond", dialConductivityVal_S1);
+         lcdCycleState = 0;
+        }
+        else if (lcdCycleState == 2) {
+         displayUpdateValue(" Dial Temp", dialTempVal_S1, "Dial Press", bloodFlowVal_S1);
+         lcdCycleState++;
+        }
+        else if (lcdCycleState == 3) {
+         displayUpdateValue("Ven Temp", venTempVal_S2, "Dial Lvl", dialLevelVal_S2);
+         lcdCycleState = 0;
+        }
+        cycle = 0;
+        }*/
       prevTime = currentTime;
-      cycle = !cycle;
     }
 
     // PID Control
@@ -355,8 +369,8 @@ void loop() {
     wastePressureAlarmPrev = wastePressureAlarm;
     temp_PWMPrev = temp_PWM;
     flow_PWMPrev = flow_PWM;
-  }
 
+  }
   if (currentTime > runTime && !finished) {
     Serial.println("\nHaemodialysis complete\n");
     finished = true;
@@ -537,6 +551,9 @@ void state2() {
   printAnalogueStatus("Dialysate Pressure", dialPressVal, "mmHg", alarmState(dialPressAlarm));
   printAnalogueStatus("Waste Pressure", wastePressVal, "mmHg", alarmState(wastePressAlarm));
   printAnalogueStatus("Dialysate Conductivity", dialConductivityVal_S1, "mS/cm", alarmState(dialConductivityAlarm));
+  if(dialTempVal_S1>40){
+    dialTempVal_s1
+  }
   printAnalogueStatus("Dialysate Temperature", dialTempVal_S1, "\xB0""C", alarmState(dialTempAlarm));
   printAnalogueStatus("pH", pHVal_S1, "pH", alarmState(pHAlarm));
   printAnalogueStatus("Water Level", waterLevelVal_S2, " % ", alarmState(waterLevelAlarm));
@@ -557,12 +574,10 @@ void printStatus() {
     state0();
     cycleState++;
   }
-
   else if (cycleState == 1) {
     state1();
     cycleState++;
   }
-
   else if (cycleState == 2) {
     state2();
     cycleState++;
