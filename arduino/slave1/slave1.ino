@@ -1,8 +1,8 @@
 // TRC3000 - NephroMate
 // Slave 1
 #include <Wire.h>
-#include <LiquidCrystal.h>
 #include <Servo.h>
+#define FLOAT_SCALE 100
 
 // Source: https://github.com/nickgammon/I2C_Anything/blob/master/I2C_Anything.h
 template <typename T> unsigned int I2C_writeAnything (const T& value)
@@ -32,15 +32,15 @@ int dialTempPin = A2;
 int bloodFlowPin = A3;
 
 // Analogue Values
-double dialConductivityVal = 0;
-double pHVal = 0;
-double dialTempVal = 0;
-double bloodFlowVal = 0;
+long dialConductivityVal = 0;
+long pHVal = 0;
+long dialTempVal = 0;
+long bloodFlowVal = 0;
 
-double dialConductivityScl = 0;
-double pHScl = 0;
-double dialTempScl = 0;
-double bloodFlowScl = 0;
+long dialConductivityScl = 0;
+long pHScl = 0;
+long dialTempScl = 0;
+long bloodFlowScl = 0;
 
 // Fault Conditions
 bool bloodPumpFault = false;
@@ -53,7 +53,6 @@ bool dialPumpRunningFB = false;
 bool mixerRunningFB = false;
 
 // Initialise LCD
-LiquidCrystal lcd(12, 13, 2, 3, 4, 5); // (rs,enable,d4,d5,d6,d7)
 unsigned long currentTime;
 unsigned long prevTime;
 unsigned long cyclePeriod = 100; // time in ms to alternate the screen values
@@ -96,7 +95,6 @@ void setup() {
   pinMode(dialClampActivePin, OUTPUT);
   pinMode(venClampActivePin, OUTPUT);
   pinMode(mixerIN2Pin, OUTPUT);
-  lcd.begin(16, 2);
 }
 
 // ---------- //
@@ -111,23 +109,19 @@ void loop() {
     pHVal = analogRead(pHPin);
     dialTempVal = analogRead(dialTempPin);
     bloodFlowVal = analogRead(bloodFlowPin);
-
+    
     // Scale Analogue Inputs for Transmission to Master
     // ** TO DO **: Verify analogue operating values
     dialConductivityScl = scaleInput(dialConductivityVal, 0, 1023, 10.0, 30.0);
     pHScl = scaleInput(pHVal, 0, 1023, 0.0, 14.0);
-    dialTempScl = scaleInput(dialTempVal, 20, 358, 5.0, 60.0);
+    dialTempScl = scaleInput(dialTempVal, 20, 400, 5.0, 60.0); // Should be 358 Tinkercad issue
     bloodFlowScl = scaleInput(bloodFlowVal, 1013, 1023, 0.0, 600.0);
 
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
-      if (cycle) {
-        displayUpdate("Dial Cond", dialConductivityScl, "pH", pHScl);
-      } else {
-        displayUpdate(" Dial Temp", dialTempScl, "Dial Press", bloodFlowScl);
-      }
+    
       prevTime = currentTime;
-      cycle = !cycle;
+    
     }
 
     // Mixer runs at a fixed speed continuously
@@ -168,7 +162,7 @@ void loop() {
     }
   }
 
-  lcd.clear();
+  
 
   // Stop all motors
   digitalWrite(mixerIN1Pin, LOW);
@@ -207,37 +201,6 @@ void MasterControl(int dataSize) {
   I2C_readAnything(clampLines);
   I2C_readAnything(flow_PWM);
 }
-
-// Update Screen
-void displayUpdate(String text1, double value1, String text2, double value2) {
-  lcd.clear(); // clear screen and set cursor to (0,0)
-
-  unsigned int strLen1 = text1.length();
-  unsigned int strLen2 = text2.length();
-  String outputText1 = "";
-  String outputText2 = "";
-
-  if ((10 - strLen1) > 0) {
-    for (int i = 0; i < (10 - strLen1); i++) {
-      outputText1 += " ";
-    }
-  }
-  outputText1 = outputText1 + text1 + ": ";
-
-  if ((10 - strLen2) > 0) {
-    for (int i = 0; i < (10 - strLen2); i++) {
-      outputText2 += " ";
-    }
-  }
-  outputText2 = outputText2 + text2 + ": ";
-
-  lcd.print(outputText1);
-  lcd.print(value1);
-  lcd.setCursor(0, 1);
-  lcd.print(outputText2);
-  lcd.print(value2);
-}
-
 // Scale Analogue Input  //
 // floating point version of the map() function
 // y = ((y2-y1/(x2-x1))*(x-x1)+y1
@@ -245,8 +208,8 @@ void displayUpdate(String text1, double value1, String text2, double value2) {
 // y1,y2 are the output min/max
 // x is the value to scale
 // y is the scaled value
-double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double scaledMax) {
-  return ((scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + scaledMin;
+long scaleInput(long rawValue, long rawMin, long rawMax, long scaledMin, long scaledMax) {
+  return ((FLOAT_SCALE*(scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + FLOAT_SCALE*scaledMin);
 }
 
 // set PWM of motor

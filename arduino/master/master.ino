@@ -2,6 +2,7 @@
 // Master
 #include <Wire.h>
 #include <LiquidCrystal.h>
+#define FLOAT_SCALE 100
 
 // Source: https://github.com/nickgammon/I2C_Anything/blob/master/I2C_Anything.h
 template <typename T> unsigned int I2C_writeAnything (const T& value)
@@ -31,10 +32,10 @@ int venPressPin = A2;
 int wastePressPin = A3;
 
 // Analogue Values
-double artPressVal = 0;
-double dialPressVal = 0;
-double venPressVal = 0;
-double wastePressVal = 0;
+long artPressVal = 0;
+long dialPressVal = 0;
+long venPressVal = 0;
+long wastePressVal = 0;
 
 // Digital Pins
 int alarmLEDPin = 13;
@@ -52,10 +53,10 @@ bool bloodPumpFaultPrev = false;
 bool airDetectAlarmPrev = false;
 
 // From Slave 1
-double dialConductivityVal_S1 = 0;
-double pHVal_S1 = 0;
-double dialTempVal_S1 = 0;
-double bloodFlowVal_S1 = 0;
+long int dialConductivityVal_S1 = 0;
+long pHVal_S1 = 0;
+long dialTempVal_S1 = 0;
+long bloodFlowVal_S1 = 0;
 bool venousClampFB_S1 = false;
 bool bypassValveFB_S1 = false;
 bool bloodPumpRunningFB_S1 = false;
@@ -63,29 +64,29 @@ bool dialPumpRunningFB_S1 = false;
 bool mixerRunningFB_S1 = false;
 
 // From Slave 2
-double waterLevelVal_S2 = 0;
-double venTempVal_S2 = 0;
-double bloodLeakVal_S2 = 0;
-double dialLevelVal_S2 = 0;
+long waterLevelVal_S2 = 0;
+long venTempVal_S2 = 0;
+long bloodLeakVal_S2 = 0;
+long dialLevelVal_S2 = 0;
 bool heaterRunningFB_S2 = false;
 bool wastePumpRunningFB_S2 = false;
 bool deaeratorRunningFB_S2 = false;
 bool heparinPumpRunningFB_S2 = false;
 
-// Alarm Limits
-const int PRESSURE_HIGH = 150; // TO DO update value
-const int PRESSURE_LOW = -230; // TO DO update value
-const int LEVEL_LOW = 10;
-const int TEMP_LOW = 36;
-const int TEMP_HIGH = 42;
-const int CONDUCTIVITY_LOW = 12;
-const int CONDUCTIVITY_HIGH = 16;
-const double PH_LOW = 6.8;
-const double PH_HIGH = 7.6;
-const int AIR_DETECT = 2000; // TO DO update value
-const int FLOW_HIGH = 500;
-const int FLOW_LOW = 200;
-const int BLOOD_LEAK = 1000; // TO DO update value
+// Alarm Limits (note multiplied by FLOAT_SCALE)
+const long PRESSURE_HIGH = 15000; // TO DO update value
+const long PRESSURE_LOW = -23000; // TO DO update value
+const long LEVEL_LOW = 1000;
+const long TEMP_LOW = 3600;
+const long TEMP_HIGH = 4200;
+const long CONDUCTIVITY_LOW = 1200;
+const long CONDUCTIVITY_HIGH = 1600;
+const long PH_LOW = 680;
+const long PH_HIGH = 760;
+const long AIR_DETECT = 2000; // TO DO update value
+const long FLOW_HIGH = 50000;
+const long FLOW_LOW = 20000;
+const long BLOOD_LEAK = 1000; // TO DO update value
 
 // PID Constants & variables
 const double TARGET_TEMP = 37; // target temperature (degrees Celsius) for dialysate solution
@@ -221,10 +222,10 @@ void loop() {
 
     // Scale Analogue Inputs
     // ** TO DO **: Verify operating scaled values
-    artPressVal = scaleInput(artPressVal, 0, 466, -300.0, -30.0);
-    dialPressVal = scaleInput(dialPressVal, 0, 466, 0, 400.0);
-    venPressVal = scaleInput(venPressVal, 0, 466, 50.0, 250.0);
-    wastePressVal = scaleInput(wastePressVal, 0, 466, 0, 400.0);
+    artPressVal = scaleInput(artPressVal, 0, 466, -300, -30);
+    dialPressVal = scaleInput(dialPressVal, 0, 466, 0, 400);
+    venPressVal = scaleInput(venPressVal, 0, 466, 50, 250);
+    wastePressVal = scaleInput(wastePressVal, 0, 466, 0, 400);
 
     // Check if Emergency Stop Button has been pressed and relay stop to slave devices
     if (!startCommandLatch) {
@@ -395,7 +396,7 @@ void stopCommandISR() {
 // ---------- //
 // FUNCTIONS  //
 // ---------- //
-// Update Screen
+// Update LCD Screen
 void displayUpdateValue(String text1, double value1, String text2, double value2) {
   lcd.clear(); // clear screen and set cursor to (0,0)
 
@@ -425,6 +426,7 @@ void displayUpdateValue(String text1, double value1, String text2, double value2
   lcd.print(value2);
 }
 
+// Update LCD Screen (text only)
 void displayUpdateString(String text1, String text2, bool clear) {
   if (clear) {
     lcd.clear(); // clear screen and set cursor to (0,0)
@@ -444,15 +446,17 @@ void displayUpdateString(String text1, String text2, bool clear) {
 // y1,y2 are the output min/max
 // x is the value to scale
 // y is the scaled value
-double scaleInput(int rawValue, int rawMin, int rawMax, double scaledMin, double scaledMax) {
-  return ((scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + scaledMin;
+long scaleInput(long rawValue, long rawMin, long rawMax, long scaledMin, long scaledMax) {
+  return ((FLOAT_SCALE * (scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + FLOAT_SCALE * scaledMin);
 }
-
+// =========================//
+// Serial Logging Functions
+// =========================//
 String alarmState(bool state) {
   return (state) ? "Alarm" : "Normal";
 }
 
-void printAnalogueStatus(String description, double value, String units, String state) {
+void printAnalogueStatus(String description, long value, String units, String state, bool scale) {
   // Check if E-Stop pressed
   if (!startCommandLatch) {
     return;
@@ -461,21 +465,46 @@ void printAnalogueStatus(String description, double value, String units, String 
   unsigned int strUnitsLen = units.length();
   unsigned int strValueLen = 0;
   unsigned int totalLen = 0;
-  if (abs(value) < 10) {
-    strValueLen = 0;
-  } else if (abs(value) < 100) {
-    strValueLen = 1;
-  }  else if (abs(value) < 1000) {
-    strValueLen = 2;
+  unsigned int valueTemp = 0;
+
+  if (scale) {
+    valueTemp = value / FLOAT_SCALE;
+    if (abs(valueTemp) < 10) {
+      strValueLen = 0;
+    } else if (abs(valueTemp) < 100) {
+      strValueLen = 1;
+    }  else if (abs(valueTemp) < 1000) {
+      strValueLen = 2;
+    }
+    else {
+      strValueLen = 3;
+    }
+
+    if (valueTemp < 0) {
+      strValueLen++;
+    }
+
+    valueTemp = value % FLOAT_SCALE;
+    if (valueTemp < 10) {
+      strValueLen--;
+    }
   }
   else {
-    strValueLen = 3;
-  }
+    if (abs(value) < 10) {
+      strValueLen = 0;
+    } else if (abs(value) < 100) {
+      strValueLen = 1;
+    }  else if (abs(value) < 1000) {
+      strValueLen = 2;
+    }
+    else {
+      strValueLen = 3;
+    }
 
-  if (value < 0) {
-    strValueLen += 1; // account for negative sign
+    if (value < 0) {
+      strValueLen += 1; // account for negative sign
+    }
   }
-
   // Append trailing spaces for alignment
   if (24 - strDescLen > 0) {
     for (int i = 0; i < (24 - strDescLen); i++) {
@@ -491,7 +520,17 @@ void printAnalogueStatus(String description, double value, String units, String 
     }
   }
 
-  Serial.println((String)description + ": " + value + " " + units + ": " + state);
+  Serial.print(description + ": ");
+  if (scale) {
+    Serial.print(value / FLOAT_SCALE);
+    Serial.print(".");
+    Serial.print(value % FLOAT_SCALE);
+    Serial.println(" " + units + ": " + state);
+  }
+  else {
+    Serial.println((String)value+" " + units + ": " + state);
+  }
+  
 }
 
 void printAnalogue(String description, double value, String units) {
@@ -540,34 +579,31 @@ void state0() {
 
 void state1() {
   Serial.println("\n              **** BLOOD CIRCUIT ****");
-  printAnalogueStatus("Arterial Pressure", artPressVal, "mmHg", alarmState(artPressureAlarm));
-  printAnalogueStatus("Venous Pressure", venPressVal, "mmHg", alarmState(venPressAlarm));
-  printAnalogueStatus("Blood Flow Rate", bloodFlowVal_S1, "mL/min", alarmState(bloodFlowAlarm));
-  printAnalogueStatus("Venous Temperature", venTempVal_S2, "\xB0""C", alarmState(venTempAlarm));
+  printAnalogueStatus("Arterial Pressure", artPressVal, "mmHg", alarmState(artPressureAlarm), true);
+  printAnalogueStatus("Venous Pressure", venPressVal, "mmHg", alarmState(venPressAlarm), true);
+  printAnalogueStatus("Blood Flow Rate", bloodFlowVal_S1, "mL/min", alarmState(bloodFlowAlarm), true);
+  printAnalogueStatus("Venous Temperature", venTempVal_S2, "\xB0""C", alarmState(venTempAlarm), true);
 }
 
 void state2() {
   Serial.println("\n              **** DIALYSATE CIRCUIT ****");
-  printAnalogueStatus("Dialysate Pressure", dialPressVal, "mmHg", alarmState(dialPressAlarm));
-  printAnalogueStatus("Waste Pressure", wastePressVal, "mmHg", alarmState(wastePressAlarm));
-  printAnalogueStatus("Dialysate Conductivity", dialConductivityVal_S1, "mS/cm", alarmState(dialConductivityAlarm));
-  if(dialTempVal_S1>40){
-    dialTempVal_s1
-  }
-  printAnalogueStatus("Dialysate Temperature", dialTempVal_S1, "\xB0""C", alarmState(dialTempAlarm));
-  printAnalogueStatus("pH", pHVal_S1, "pH", alarmState(pHAlarm));
-  printAnalogueStatus("Water Level", waterLevelVal_S2, " % ", alarmState(waterLevelAlarm));
-  printAnalogueStatus("Blood Leak Detector", bloodLeakVal_S2, "", alarmState(bloodLeakAlarm));
-  printAnalogueStatus("Dialysate Level", dialLevelVal_S2, " % ", alarmState(dialLevelAlarm));
+  printAnalogueStatus("Dialysate Pressure", dialPressVal, "mmHg", alarmState(dialPressAlarm), true);
+  printAnalogueStatus("Waste Pressure", wastePressVal, "mmHg", alarmState(wastePressAlarm), true);
+  printAnalogueStatus("Dialysate Conductivity", dialConductivityVal_S1, "mS/cm", alarmState(dialConductivityAlarm), true);
+  printAnalogueStatus("Dialysate Temperature", dialTempVal_S1, "\xB0""C", alarmState(dialTempAlarm), true);
+  printAnalogueStatus("pH", pHVal_S1, "pH", alarmState(pHAlarm), true);
+  printAnalogueStatus("Water Level", waterLevelVal_S2, "%", alarmState(waterLevelAlarm), true);
+  printAnalogueStatus("Blood Leak Detector", bloodLeakVal_S2, "", alarmState(bloodLeakAlarm), true);
+  printAnalogueStatus("Dialysate Level", dialLevelVal_S2, "%", alarmState(dialLevelAlarm), true);
 }
 
 void state3() {
   Serial.println("\n              **** DEVICES STATUS ****");
-  printAnalogueStatus("Mixer", (mixerRunningFB_S1 * 100), "%", motorState(mixerRunningFB_S1));
-  printAnalogueStatus("Blood Pump", (map(flow_PWM, 0, 255, 0, 100)), "%", motorState(bloodPumpRunningFB_S1));
-  printAnalogueStatus("Dialysate Pump", (dialPumpRunningFB_S1 * 100), "%", motorState(dialPumpRunningFB_S1));
-  printAnalogueStatus("Bypass Valve", (bypassValveFB_S1 * 100), "%", valveState(bypassValveFB_S1));
-  printAnalogueStatus("Venous Clamp", (venousClampFB_S1 * 100), "%", servoState(venousClampFB_S1));
+  printAnalogueStatus("Mixer", (mixerRunningFB_S1 * 100), "%", motorState(mixerRunningFB_S1), false);
+  printAnalogueStatus("Blood Pump", (map(flow_PWM, 0, 255, 0, 100)), "%", motorState(bloodPumpRunningFB_S1), false);
+  printAnalogueStatus("Dialysate Pump", (dialPumpRunningFB_S1 * 100), "%", motorState(dialPumpRunningFB_S1), false);
+  printAnalogueStatus("Bypass Valve", (bypassValveFB_S1 * 100), "%", valveState(bypassValveFB_S1), false);
+  printAnalogueStatus("Venous Clamp", (venousClampFB_S1 * 100), "%", servoState(venousClampFB_S1), false);
 }
 void printStatus() {
   if (cycleState == 0) {
