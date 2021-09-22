@@ -89,7 +89,7 @@ void loop() {
     // Scale Analogue Inputs for Transmission to Master
     // ** TO DO **: Verify operating scaled values
     waterLevelValScl = scaleInput(waterLevelVal, 1013, 1023, 0, 100);
-    venTempValScl = scaleInput(venTempVal, 20, 400, 5, 60); // Should be 358 Tinkercad issue
+    venTempValScl = scaleInput(venTempVal, 20, 358, 5, 60); // Should be 358 Tinkercad issue
     bloodLeakValScl = bloodLeakVal*FLOAT_SCALE; // no need for scaling, since checking against arbitrary threshold found experimentally
     dialLevelValScl = scaleInput(dialLevelVal, 0, 466, 0, 100);
 

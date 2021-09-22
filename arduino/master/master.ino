@@ -53,7 +53,7 @@ bool bloodPumpFaultPrev = false;
 bool airDetectAlarmPrev = false;
 
 // From Slave 1
-long int dialConductivityVal_S1 = 0;
+long dialConductivityVal_S1 = 0;
 long pHVal_S1 = 0;
 long dialTempVal_S1 = 0;
 long bloodFlowVal_S1 = 0;
@@ -134,7 +134,7 @@ unsigned long currentTime = 0;
 unsigned long prevTime = 0;
 double runTimeRemaining = 0;
 unsigned long cyclePeriod = 50; // time in ms to alternate the screen values (note 100ms in tinkercad =/= 100ms real time)
-unsigned long runTime = 4000; // time in ms to perform hemodialysis (refer comment above) (4000)
+unsigned long runTime = 10000; // time in ms to perform hemodialysis (refer comment above) (4000)
 unsigned long hepRunTime = 1000; // Duration to run Heparin infusion (200)
 double hepRunTimeRemaining = 0;
 int cycle = 0; // alternate values displayed on LCD screen and in serial monitor
@@ -171,9 +171,9 @@ void loop() {
     // Collect user input
     }
     hepRunTime = (long)Serial.parseInt();*/
-
-  displayUpdateString("Machine off.", "Press start.", 0);
-
+  if(!finished){
+    displayUpdateString("Machine off.", "Press start.", 0);
+  }
   // Clear Alarms
   digitalWrite(alarmLEDPin, LOW);
   digitalWrite(alarmBuzzerPin, LOW);
@@ -374,6 +374,7 @@ void loop() {
   }
   if (currentTime > runTime && !finished) {
     Serial.println("\nHaemodialysis complete\n");
+    displayUpdateString("Haemodialysis", "Complete", 1);
     finished = true;
   }
 }

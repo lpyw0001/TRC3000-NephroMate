@@ -109,14 +109,19 @@ void loop() {
     pHVal = analogRead(pHPin);
     dialTempVal = analogRead(dialTempPin);
     bloodFlowVal = analogRead(bloodFlowPin);
-    
+
     // Scale Analogue Inputs for Transmission to Master
     // ** TO DO **: Verify analogue operating values
-    dialConductivityScl = scaleInput(dialConductivityVal, 0, 1023, 10.0, 30.0);
-    pHScl = scaleInput(pHVal, 0, 1023, 0.0, 14.0);
-    dialTempScl = scaleInput(dialTempVal, 20, 400, 5.0, 60.0); // Should be 358 Tinkercad issue
-    bloodFlowScl = scaleInput(bloodFlowVal, 1013, 1023, 0.0, 600.0);
-
+    /*dialConductivityScl = scaleInput(dialConductivityVal, 0, 1023, 10, 30);
+    pHScl = scaleInput(pHVal, 0, 1023, 0, 14);
+    dialTempScl = scaleInput(dialTempVal, 20, 400, 5, 60); // Should be 358 Tinkercad issue
+    bloodFlowScl = scaleInput(bloodFlowVal, 0, 1023, 30, 600);*/
+    
+    dialConductivityScl = map(dialConductivityVal, 0, 1023, 10*FLOAT_SCALE, 30*FLOAT_SCALE);
+    pHScl = map(pHVal, 0, 1023, 0*FLOAT_SCALE, 14*FLOAT_SCALE);
+    dialTempScl = map(dialTempVal, 20, 400, 5*FLOAT_SCALE, 60*FLOAT_SCALE); // Should be 358 Tinkercad issue
+    bloodFlowScl = map(bloodFlowVal, 0, 1023, 30*FLOAT_SCALE, 600*FLOAT_SCALE);
+    
     currentTime = millis();
     if (currentTime - prevTime > cyclePeriod) {
     
@@ -160,6 +165,7 @@ void loop() {
       venousClamp.write(CLAMP_OFF);
       bypassValve.write(CLAMP_OFF);
     }
+    
   }
 
   
