@@ -133,7 +133,7 @@ String tempPrinting = "";
 unsigned long currentTime = 0;
 unsigned long prevTime = 0;
 double runTimeRemaining = 0;
-unsigned long cyclePeriod = 50; // time in ms to alternate the screen values (note 100ms in tinkercad =/= 100ms real time)
+unsigned long cyclePeriod = 100; // time in ms to alternate the screen values (note 40 in tinkercad =/= 40 real time)
 unsigned long runTime = 10000; // time in ms to perform hemodialysis (refer comment above) (4000)
 unsigned long hepRunTime = 1000; // Duration to run Heparin infusion (200)
 double hepRunTimeRemaining = 0;
@@ -142,6 +142,8 @@ bool firstLoop = true;
 int cycleState = 0;
 bool finished = false;
 int lcdCycleState = 0;
+int flagCount = 0;
+
 // ----------- //
 // SETUP LOOP  //
 // ----------- //
@@ -171,7 +173,7 @@ void loop() {
     // Collect user input
     }
     hepRunTime = (long)Serial.parseInt();*/
-  if(!finished){
+  if (!finished) {
     displayUpdateString("Machine off.", "Press start.", 0);
   }
   // Clear Alarms
@@ -188,7 +190,7 @@ void loop() {
   Wire.endTransmission();
 
   while ((startCommandLatch) & (currentTime < runTime)) {
-
+    flagCount = 0;
     if (firstLoop) {
       /*Serial.print("\nEnter haemodialysis runtime (min): ");
         if (Serial.available() > 0){
@@ -202,6 +204,7 @@ void loop() {
       Wire.beginTransmission(0x11);
       I2C_writeAnything(startCommandLatch);
       Wire.endTransmission();
+      Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"); //'Clear' serial monitor output
       Serial.println("\nHaemodialysis started\n");
       displayUpdateString("Haemodialysis", "machine running", 1);
     }
@@ -281,6 +284,14 @@ void loop() {
     // Check Device Fault Conditions
     bloodPumpFault = airDetectAlarm || venPressAlarm || artPressureAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm;
 
+    // Stop Operating if air detected
+    // ** TO DO **: CLAMP LINE
+    if (airDetectAlarm) {
+      startCommandLatch = false;
+      //Serial.println("\nAir detected. Emergency stop initiated.\n"); // This breaks tinkercad
+      //displayUpdateString("Air Detected", "Emerg Stop", 1); // This also breaks tinkercad
+    }
+
     if (firstLoop) {
       anyAlarmTriggered = false; // Alarms not triggered first loop
       firstLoop = false;
@@ -303,34 +314,6 @@ void loop() {
 
     if (currentTime - prevTime > cyclePeriod) {
       printStatus();
-      // Removed IO monitoring on LCD screen due to tinkercad behaving like tinkercad
-      /*
-        if (cycle < 10) {
-
-        cycle++;
-        }
-        else if (cycle == 10) {
-
-
-        // Note reduced number of cycles (not all IO) due to limited sketch size in Tinkercad (smaller than actual Arduino)
-        if (lcdCycleState == 0) {
-         displayUpdateValue("Ven Press", venPressVal, "Dial Press", dialPressVal);
-         lcdCycleState++;
-        }
-        else if (lcdCycleState == 1) {
-         displayUpdateValue("Art Press", artPressVal, "Dial Cond", dialConductivityVal_S1);
-         lcdCycleState = 0;
-        }
-        else if (lcdCycleState == 2) {
-         displayUpdateValue(" Dial Temp", dialTempVal_S1, "Dial Press", bloodFlowVal_S1);
-         lcdCycleState++;
-        }
-        else if (lcdCycleState == 3) {
-         displayUpdateValue("Ven Temp", venTempVal_S2, "Dial Lvl", dialLevelVal_S2);
-         lcdCycleState = 0;
-        }
-        cycle = 0;
-        }*/
       prevTime = currentTime;
     }
 
@@ -377,6 +360,8 @@ void loop() {
     displayUpdateString("Haemodialysis", "Complete", 1);
     finished = true;
   }
+
+
 }
 
 // ------------- //
@@ -441,7 +426,7 @@ void displayUpdateString(String text1, String text2, bool clear) {
 }
 
 // Scale Analogue Input  //
-// floating point version of the map() function
+// fixed point version of the map() function
 // y = ((y2-y1/(x2-x1))*(x-x1)+y1
 // x1,x2 are the input min/max
 // y1,y2 are the output min/max
@@ -466,46 +451,39 @@ void printAnalogueStatus(String description, long value, String units, String st
   unsigned int strUnitsLen = units.length();
   unsigned int strValueLen = 0;
   unsigned int totalLen = 0;
-  unsigned int valueTemp = 0;
+  long valueTemp = 0;
 
   if (scale) {
     valueTemp = value / FLOAT_SCALE;
-    if (abs(valueTemp) < 10) {
-      strValueLen = 0;
-    } else if (abs(valueTemp) < 100) {
-      strValueLen = 1;
-    }  else if (abs(valueTemp) < 1000) {
-      strValueLen = 2;
-    }
-    else {
-      strValueLen = 3;
-    }
-
-    if (valueTemp < 0) {
-      strValueLen++;
-    }
-
-    valueTemp = value % FLOAT_SCALE;
-    if (valueTemp < 10) {
-      strValueLen--;
-    }
   }
   else {
-    if (abs(value) < 10) {
-      strValueLen = 0;
-    } else if (abs(value) < 100) {
-      strValueLen = 1;
-    }  else if (abs(value) < 1000) {
-      strValueLen = 2;
-    }
-    else {
-      strValueLen = 3;
-    }
-
-    if (value < 0) {
-      strValueLen += 1; // account for negative sign
-    }
+    valueTemp = value;
   }
+
+  if (abs(valueTemp) < 10) {
+    strValueLen = 0;
+  }
+  else if (abs(valueTemp) < 100) {
+    strValueLen = 1;
+  }
+  else if (abs(valueTemp) < 1000) {
+    strValueLen = 2;
+  }
+  else {
+    strValueLen = 3;
+  }
+
+  if (valueTemp < 0) {
+    strValueLen++; // account for negative sign
+  }
+
+  if (scale && (value % FLOAT_SCALE) == 0) {
+    strValueLen--;
+  }
+  /*else if(scale){
+    strValueLen--;
+    }*/
+
   // Append trailing spaces for alignment
   if (24 - strDescLen > 0) {
     for (int i = 0; i < (24 - strDescLen); i++) {
@@ -525,13 +503,13 @@ void printAnalogueStatus(String description, long value, String units, String st
   if (scale) {
     Serial.print(value / FLOAT_SCALE);
     Serial.print(".");
-    Serial.print(value % FLOAT_SCALE);
+    Serial.print(abs(value % FLOAT_SCALE));
     Serial.println(" " + units + ": " + state);
   }
   else {
-    Serial.println((String)value+" " + units + ": " + state);
+    Serial.println((String)value + " " + units + "   : " + state); // additional spaces for padding
   }
-  
+
 }
 
 void printAnalogue(String description, double value, String units) {
@@ -623,4 +601,5 @@ void printStatus() {
     state3();
     cycleState = 0;
   }
+
 }
