@@ -74,19 +74,19 @@ bool deaeratorRunningFB_S2 = false;
 bool heparinPumpRunningFB_S2 = false;
 
 // Alarm Limits (note multiplied by FLOAT_SCALE)
-const long PRESSURE_HIGH = 15000; // TO DO update value
-const long PRESSURE_LOW = -23000; // TO DO update value
-const long LEVEL_LOW = 1000;
-const long TEMP_LOW = 3600;
-const long TEMP_HIGH = 4200;
-const long CONDUCTIVITY_LOW = 1200;
-const long CONDUCTIVITY_HIGH = 1600;
-const long PH_LOW = 680;
-const long PH_HIGH = 760;
-const long AIR_DETECT = 2000; // TO DO update value
+const int PRESSURE_HIGH = 15000; // TO DO update value
+const int PRESSURE_LOW = -23000; // TO DO update value
+const int LEVEL_LOW = 1000;
+const int TEMP_LOW = 3600;
+const int TEMP_HIGH = 4200;
+const int CONDUCTIVITY_LOW = 1200;
+const int CONDUCTIVITY_HIGH = 1600;
+const int PH_LOW = 680;
+const int PH_HIGH = 760;
+const int AIR_DETECT = 2000; // TO DO update value
 const long FLOW_HIGH = 50000;
 const long FLOW_LOW = 20000;
-const long BLOOD_LEAK = 1000; // TO DO update value
+const int BLOOD_LEAK = 1000; // TO DO update value
 
 // PID Constants & variables
 const double TARGET_TEMP = 37; // target temperature (degrees Celsius) for dialysate solution
@@ -127,15 +127,16 @@ bool wastePressureAlarmPrev = false;
 
 // Initialise LCD
 LiquidCrystal lcd(12, 11, 6, 7, 4, 5); // (rs,enable,d4,d5,d6,d7)
-String tempPrinting = "";
 
 // Timing and Sequencing Variables
 unsigned long currentTime = 0;
 unsigned long prevTime = 0;
 double runTimeRemaining = 0;
-unsigned long cyclePeriod = 100; // time in ms to alternate the screen values (note 40 in tinkercad =/= 40 real time)
-unsigned long runTime = 10000; // time in ms to perform hemodialysis (refer comment above) (4000)
-unsigned long hepRunTime = 1000; // Duration to run Heparin infusion (200)
+unsigned int cyclePeriod = 80; // time in ms to alternate the screen values (note 40 in tinkercad =/= 40 real time)
+unsigned int runTimeMin = 10; // time in ms to perform hemodialysis (refer comment above) (4000)
+unsigned long runTimeMs = 10;
+unsigned int hepRunTime = 1000; // Duration to run Heparin infusion (200)
+unsigned long hepRunTimeMs = 10;
 double hepRunTimeRemaining = 0;
 int cycle = 0; // alternate values displayed on LCD screen and in serial monitor
 bool firstLoop = true;
@@ -143,6 +144,13 @@ int cycleState = 0;
 bool finished = false;
 int lcdCycleState = 0;
 int flagCount = 0;
+bool serialInputFlag = false;
+bool fluidFlag = false;
+bool runTimeFlag = false;
+bool hepFlag = false;
+
+// Other Process Control
+long desiredFluidRemoval = 0;
 
 // ----------- //
 // SETUP LOOP  //
@@ -165,17 +173,30 @@ void setup() {
 // MAIN LOOP  //
 // ---------- //
 void loop() {
-  /*while(Serial.available()==0){
-    // Collect user input
-    }
-    Serial.print("\nEnter heparin pump runtime (min): ");
-    while(Serial.available()==0){
-    // Collect user input
-    }
-    hepRunTime = (long)Serial.parseInt();*/
+  if (!serialInputFlag) {
+    Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"); //'Clear' serial monitor output
+    serialInputFlag = true;
+  }
+
+  if (!runTimeFlag) {
+    runTimeMin = SerialDataEntry("Session Duration (min): ", 99);
+    runTimeFlag = true;
+  }
+
+  if (!fluidFlag) {
+    desiredFluidRemoval = SerialDataEntry("Desired Fluid Removal (L): ", 1);
+    fluidFlag = true;
+  }
+
+  if (!hepFlag) {
+    hepRunTime = SerialDataEntry("Heparin Duration (min) 'z' for none: ", 0);
+    hepFlag = true;
+  }
+
   if (!finished) {
     displayUpdateString("Machine off.", "Press start.", 0);
   }
+
   // Clear Alarms
   digitalWrite(alarmLEDPin, LOW);
   digitalWrite(alarmBuzzerPin, LOW);
@@ -189,179 +210,173 @@ void loop() {
   I2C_writeAnything(false);
   Wire.endTransmission();
 
-  while ((startCommandLatch) & (currentTime < runTime)) {
-    flagCount = 0;
-    if (firstLoop) {
-      /*Serial.print("\nEnter haemodialysis runtime (min): ");
-        if (Serial.available() > 0){
-        runTime = (long)Serial.parseInt();
-        }*/
-      displayUpdateString("Priming Complete", "Alarm tests pass", 1);
-      delay(50); // hold message on screen for first loop
-      Wire.beginTransmission(0x10);
+  if (runTimeFlag && fluidFlag) {
+    while ((startCommandLatch) & (currentTime < runTimeMs)) {
+      flagCount = 0;
+      if (firstLoop) {
+        runTimeMs = runTimeMin * 100;
+        hepRunTimeMs = hepRunTime * 100;
+        displayUpdateString("Priming Complete", "Alarm tests pass", 1);
+        delay(50); // hold message on screen for first loop
+        Wire.beginTransmission(0x10);
+        I2C_writeAnything(startCommandLatch);
+        Wire.endTransmission();
+        Wire.beginTransmission(0x11);
+        I2C_writeAnything(startCommandLatch);
+        Wire.endTransmission();
+        Serial.println("\n\nHaemodialysis started\n");
+        displayUpdateString("Haemodialysis", "machine running", 1);
+        delay(10);
+      }
+
+      // Check for Air in the line
+      digitalWrite(airDetectTXPin, LOW);
+      delayMicroseconds(5);
+      digitalWrite(airDetectTXPin, HIGH);
+      delayMicroseconds(10); // Send + Receive
+      digitalWrite(airDetectTXPin, LOW);
+      airDetectValue = pulseIn(airDetectRXPin, HIGH);
+
+      // Read Analogue Inputs
+      artPressVal = analogRead(artPressPin);
+      dialPressVal = analogRead(dialPressPin);
+      venPressVal = analogRead(venPressPin);
+      wastePressVal = analogRead(wastePressPin);
+
+      // Scale Analogue Inputs
+      artPressVal = scaleInput(artPressVal, 0, 466, -300, -30);
+      dialPressVal = scaleInput(dialPressVal, 0, 466, 0, 400);
+      venPressVal = scaleInput(venPressVal, 0, 466, 50, 250);
+      wastePressVal = scaleInput(wastePressVal, 0, 466, 0, 400);
+
+      // Check if Emergency Stop Button has been pressed and relay stop to slave devices
+      if (!startCommandLatch) {
+        Wire.beginTransmission(0x10);
+        I2C_writeAnything(startCommandLatch);
+        Wire.endTransmission();
+        Wire.beginTransmission(0x11);
+        I2C_writeAnything(startCommandLatch);
+        Wire.endTransmission();
+        break;
+      }
+
+      // Request IO from slave 0x10 (4 x analogue values, 5 x boolean values)
+      Wire.requestFrom(0x10, 21);
+      I2C_readAnything(dialConductivityVal_S1);
+      I2C_readAnything(pHVal_S1);
+      I2C_readAnything(dialTempVal_S1);
+      I2C_readAnything(bloodFlowVal_S1);
+      I2C_readAnything(venousClampFB_S1);
+      I2C_readAnything(bypassValveFB_S1);
+      I2C_readAnything(bloodPumpRunningFB_S1);
+      I2C_readAnything(dialPumpRunningFB_S1);
+      I2C_readAnything(mixerRunningFB_S1);
+
+      // Request IO from slave 0x11 (4 x analogue inputs, 4 x boolean values)
+      Wire.requestFrom(0x11, 20);
+      I2C_readAnything(waterLevelVal_S2);
+      I2C_readAnything(venTempVal_S2);
+      I2C_readAnything(bloodLeakVal_S2);
+      I2C_readAnything(dialLevelVal_S2);
+      I2C_readAnything(heaterRunningFB_S2);
+      I2C_readAnything(wastePumpRunningFB_S2);
+      I2C_readAnything(deaeratorRunningFB_S2);
+      I2C_readAnything(heparinPumpRunningFB_S2);
+
+      // Check Alarm Conditions
+      artPressureAlarm = (artPressVal > PRESSURE_HIGH || artPressVal < PRESSURE_LOW);
+      venPressAlarm = (venPressVal > PRESSURE_HIGH || venPressVal < PRESSURE_LOW);
+      airDetectAlarm = airDetectValue > AIR_DETECT;
+      dialConductivityAlarm = dialConductivityVal_S1 > CONDUCTIVITY_HIGH || dialConductivityVal_S1 < CONDUCTIVITY_LOW;
+      pHAlarm = pHVal_S1 > PH_HIGH || pHVal_S1 < PH_LOW;
+      dialTempAlarm = dialTempVal_S1 > TEMP_HIGH || dialTempVal_S1 < TEMP_LOW;
+      bloodFlowAlarm = bloodFlowVal_S1 > FLOW_HIGH || bloodFlowVal_S1 < FLOW_LOW;
+      waterLevelAlarm = waterLevelVal_S2 < LEVEL_LOW;
+      venTempAlarm = venTempVal_S2 < TEMP_LOW || venTempVal_S2 > TEMP_HIGH;
+      bloodLeakAlarm = bloodLeakVal_S2 > BLOOD_LEAK;
+      dialLevelAlarm = dialLevelVal_S2 < LEVEL_LOW;
+      wastePressureAlarm = wastePressVal > PRESSURE_HIGH;
+
+      anyAlarmTriggered = artPressureAlarm || venPressAlarm || airDetectAlarm || dialConductivityAlarm || pHAlarm || dialTempAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm || bloodLeakAlarm || dialLevelAlarm;
+
+      // Check Device Fault Conditions
+      bloodPumpFault = airDetectAlarm || venPressAlarm || artPressureAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm;
+
+      // Stop Operating if air detected
+      // ** TO DO **: CLAMP LINE
+      if (airDetectAlarm) {
+        stopCommandISR();
+      }
+
+      if (firstLoop) {
+        anyAlarmTriggered = false; // Alarms not triggered first loop
+        firstLoop = false;
+      }
+
+      // Trigger LED + Buzzer if any alarm conditions satisfied
+      if (anyAlarmTriggered) {
+        digitalWrite(alarmLEDPin, HIGH);
+        // digitalWrite(alarmBuzzerPin, HIGH);
+      }
+      else {
+        digitalWrite(alarmLEDPin, LOW);
+        digitalWrite(alarmBuzzerPin, LOW);
+      }
+
+      // Update Display
+      currentTime = millis();
+      runTimeRemaining = (runTimeMs > currentTime) ? (runTimeMs - currentTime) / 100 : 0; // arbitrary scaling to return a reasonable value
+      hepRunTimeRemaining = (hepRunTimeMs > currentTime) ? (hepRunTimeMs - currentTime) / 100 : 0;
+
+      if (currentTime - prevTime > cyclePeriod) {
+        printStatus();
+        prevTime = currentTime;
+      }
+
+      // PID Control
+      double dt = ((double)(currentTime - prevT)) / (1.0e3); // convert from ms to s
+      prevT = currentTime;
+      temp_PWM = PIDcontrol(TARGET_TEMP, dialTempVal_S1, dt, kp_temp, ki_temp, kd_temp, eprev_temp, eintegral_temp);
+      flow_PWM = PIDcontrol(TARGET_FLOW, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, eprev_flow, eintegral_flow);
+      int temp_PWMPrev;
+      int flow_PWMPrev;
+
+      // Second Check if Emergency Stop Button has been pressed and relay stop to slave devices
+      // if (startCommandLatch != startCommandLatchPrev || wastePressureAlarm != wastePressureAlarmPrev || temp_PWM != temp_PWMPrev ) {
+      Wire.beginTransmission(0x11); // slave 2
       I2C_writeAnything(startCommandLatch);
+      I2C_writeAnything(temp_PWM); // heater motor PWM
+      I2C_writeAnything(wastePressureAlarm);
+      I2C_writeAnything(hepRunTimeRemaining);
       Wire.endTransmission();
-      Wire.beginTransmission(0x11);
-      I2C_writeAnything(startCommandLatch);
-      Wire.endTransmission();
-      Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"); //'Clear' serial monitor output
-      Serial.println("\nHaemodialysis started\n");
-      displayUpdateString("Haemodialysis", "machine running", 1);
+      //}
+
+      // Send fault conditions to slave devices if any values have changed
+      // Only one receive function so need to send all values
+      if (startCommandLatch != startCommandLatchPrev || bloodPumpFault != bloodPumpFaultPrev || airDetectAlarm != airDetectAlarmPrev || flow_PWM != flow_PWMPrev) {
+        Wire.beginTransmission(0x10); // slave 1
+        I2C_writeAnything(startCommandLatch);
+        I2C_writeAnything(bloodPumpFault);
+        I2C_writeAnything(airDetectAlarm); // Activate dialysate and venous clamps
+        I2C_writeAnything(flow_PWM); // blood pump PWM
+        Wire.endTransmission();
+      }
+
+      // Update Previous Values
+      startCommandLatchPrev = startCommandLatch;
+      bloodPumpFaultPrev = bloodPumpFault;
+      airDetectAlarmPrev = airDetectAlarm;
+      wastePressureAlarmPrev = wastePressureAlarm;
+      temp_PWMPrev = temp_PWM;
+      flow_PWMPrev = flow_PWM;
+
     }
-
-    // Check for Air in the line
-    digitalWrite(airDetectTXPin, LOW);
-    delayMicroseconds(5);
-    digitalWrite(airDetectTXPin, HIGH);
-    delayMicroseconds(10); // Send + Receive
-    digitalWrite(airDetectTXPin, LOW);
-    airDetectValue = pulseIn(airDetectRXPin, HIGH);
-
-    // Read Analogue Inputs
-    artPressVal = analogRead(artPressPin);
-    dialPressVal = analogRead(dialPressPin);
-    venPressVal = analogRead(venPressPin);
-    wastePressVal = analogRead(wastePressPin);
-
-    // Scale Analogue Inputs
-    // ** TO DO **: Verify operating scaled values
-    artPressVal = scaleInput(artPressVal, 0, 466, -300, -30);
-    dialPressVal = scaleInput(dialPressVal, 0, 466, 0, 400);
-    venPressVal = scaleInput(venPressVal, 0, 466, 50, 250);
-    wastePressVal = scaleInput(wastePressVal, 0, 466, 0, 400);
-
-    // Check if Emergency Stop Button has been pressed and relay stop to slave devices
-    if (!startCommandLatch) {
-      Wire.beginTransmission(0x10);
-      I2C_writeAnything(startCommandLatch);
-      Wire.endTransmission();
-      Wire.beginTransmission(0x11);
-      I2C_writeAnything(startCommandLatch);
-      Wire.endTransmission();
-      break;
+    if (currentTime > runTimeMs && !finished) {
+      Serial.println("\nHaemodialysis complete\n");
+      displayUpdateString("Haemodialysis", "Complete", 1);
+      finished = true;
     }
-
-    // Request IO from slave 0x10 (4 x analogue values, 5 x boolean values)
-    // ** TO DO ** CHECK SIZE OF BOOL SENT OVER I2C
-    Wire.requestFrom(0x10, 21);
-    I2C_readAnything(dialConductivityVal_S1);
-    I2C_readAnything(pHVal_S1);
-    I2C_readAnything(dialTempVal_S1);
-    I2C_readAnything(bloodFlowVal_S1);
-    I2C_readAnything(venousClampFB_S1);
-    I2C_readAnything(bypassValveFB_S1);
-    I2C_readAnything(bloodPumpRunningFB_S1);
-    I2C_readAnything(dialPumpRunningFB_S1);
-    I2C_readAnything(mixerRunningFB_S1);
-
-    // Request IO from slave 0x11 (4 x analogue inputs, 4 x boolean values)
-    Wire.requestFrom(0x11, 20);
-    I2C_readAnything(waterLevelVal_S2);
-    I2C_readAnything(venTempVal_S2);
-    I2C_readAnything(bloodLeakVal_S2);
-    I2C_readAnything(dialLevelVal_S2);
-    I2C_readAnything(heaterRunningFB_S2);
-    I2C_readAnything(wastePumpRunningFB_S2);
-    I2C_readAnything(deaeratorRunningFB_S2);
-    I2C_readAnything(heparinPumpRunningFB_S2);
-
-    // Check Alarm Conditions
-    artPressureAlarm = (artPressVal > PRESSURE_HIGH || artPressVal < PRESSURE_LOW);
-    venPressAlarm = (venPressVal > PRESSURE_HIGH || venPressVal < PRESSURE_LOW);
-    airDetectAlarm = airDetectValue > AIR_DETECT;
-    dialConductivityAlarm = dialConductivityVal_S1 > CONDUCTIVITY_HIGH || dialConductivityVal_S1 < CONDUCTIVITY_LOW;
-    pHAlarm = pHVal_S1 > PH_HIGH || pHVal_S1 < PH_LOW;
-    dialTempAlarm = dialTempVal_S1 > TEMP_HIGH || dialTempVal_S1 < TEMP_LOW;
-    bloodFlowAlarm = bloodFlowVal_S1 > FLOW_HIGH || bloodFlowVal_S1 < FLOW_LOW;
-    waterLevelAlarm = waterLevelVal_S2 < LEVEL_LOW;
-    venTempAlarm = venTempVal_S2 < TEMP_LOW || venTempVal_S2 > TEMP_HIGH;
-    bloodLeakAlarm = bloodLeakVal_S2 > BLOOD_LEAK;
-    dialLevelAlarm = dialLevelVal_S2 < LEVEL_LOW;
-    wastePressureAlarm = wastePressVal > PRESSURE_HIGH;
-
-    anyAlarmTriggered = artPressureAlarm || venPressAlarm || airDetectAlarm || dialConductivityAlarm || pHAlarm || dialTempAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm || bloodLeakAlarm || dialLevelAlarm;
-
-    // Check Device Fault Conditions
-    bloodPumpFault = airDetectAlarm || venPressAlarm || artPressureAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm;
-
-    // Stop Operating if air detected
-    // ** TO DO **: CLAMP LINE
-    if (airDetectAlarm) {
-      startCommandLatch = false;
-      //Serial.println("\nAir detected. Emergency stop initiated.\n"); // This breaks tinkercad
-      //displayUpdateString("Air Detected", "Emerg Stop", 1); // This also breaks tinkercad
-    }
-
-    if (firstLoop) {
-      anyAlarmTriggered = false; // Alarms not triggered first loop
-      firstLoop = false;
-    }
-
-    // Trigger LED + Buzzer if any alarm conditions satisfied
-    if (anyAlarmTriggered) {
-      digitalWrite(alarmLEDPin, HIGH);
-      // digitalWrite(alarmBuzzerPin, HIGH);
-    }
-    else {
-      digitalWrite(alarmLEDPin, LOW);
-      digitalWrite(alarmBuzzerPin, LOW);
-    }
-
-    // Update Display
-    currentTime = millis();
-    runTimeRemaining = (runTime > currentTime) ? (runTime - currentTime) / 12 : 0; // arbitrary scaling to return a reasonable value
-    hepRunTimeRemaining = (hepRunTime > currentTime) ? (hepRunTime - currentTime) / 12 : 0;
-
-    if (currentTime - prevTime > cyclePeriod) {
-      printStatus();
-      prevTime = currentTime;
-    }
-
-    // PID Control
-    double dt = ((double)(currentTime - prevT)) / (1.0e3); // convert from ms to s
-    prevT = currentTime;
-    temp_PWM = PIDcontrol(TARGET_TEMP, dialTempVal_S1, dt, kp_temp, ki_temp, kd_temp, eprev_temp, eintegral_temp);
-    flow_PWM = PIDcontrol(TARGET_FLOW, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, eprev_flow, eintegral_flow);
-    int temp_PWMPrev;
-    int flow_PWMPrev;
-
-    // Second Check if Emergency Stop Button has been pressed and relay stop to slave devices
-    // if (startCommandLatch != startCommandLatchPrev || wastePressureAlarm != wastePressureAlarmPrev || temp_PWM != temp_PWMPrev ) {
-    Wire.beginTransmission(0x11); // slave 2
-    I2C_writeAnything(startCommandLatch);
-    I2C_writeAnything(temp_PWM); // heater motor PWM
-    I2C_writeAnything(wastePressureAlarm);
-    I2C_writeAnything(hepRunTimeRemaining);
-    Wire.endTransmission();
-    //}
-
-    // Send fault conditions to slave devices if any values have changed
-    // Only one receive function so need to send all values
-    if (startCommandLatch != startCommandLatchPrev || bloodPumpFault != bloodPumpFaultPrev || airDetectAlarm != airDetectAlarmPrev || flow_PWM != flow_PWMPrev) {
-      Wire.beginTransmission(0x10); // slave 1
-      I2C_writeAnything(startCommandLatch);
-      I2C_writeAnything(bloodPumpFault);
-      I2C_writeAnything(airDetectAlarm); // Activate dialysate and venous clamps
-      I2C_writeAnything(flow_PWM); // blood pump PWM
-      Wire.endTransmission();
-    }
-
-    // Update Previous Values
-    startCommandLatchPrev = startCommandLatch;
-    bloodPumpFaultPrev = bloodPumpFault;
-    airDetectAlarmPrev = airDetectAlarm;
-    wastePressureAlarmPrev = wastePressureAlarm;
-    temp_PWMPrev = temp_PWM;
-    flow_PWMPrev = flow_PWM;
-
   }
-  if (currentTime > runTime && !finished) {
-    Serial.println("\nHaemodialysis complete\n");
-    displayUpdateString("Haemodialysis", "Complete", 1);
-    finished = true;
-  }
-
-
 }
 
 // ------------- //
@@ -376,7 +391,7 @@ void startCommandISR() {
 void stopCommandISR() {
   startCommandLatch = false;
   displayUpdateString("Machine off.", "Press start.", 1);
-  Serial.println("\n\n======================\n EMERGENCY STOP PRESSED \n======================\n\n");
+  Serial.println("\n\n======================\n EMERGENCY STOP \n======================\n\n");
 }
 
 // ---------- //
@@ -480,9 +495,6 @@ void printAnalogueStatus(String description, long value, String units, String st
   if (scale && (value % FLOAT_SCALE) == 0) {
     strValueLen--;
   }
-  /*else if(scale){
-    strValueLen--;
-    }*/
 
   // Append trailing spaces for alignment
   if (24 - strDescLen > 0) {
@@ -500,6 +512,7 @@ void printAnalogueStatus(String description, long value, String units, String st
   }
 
   Serial.print(description + ": ");
+
   if (scale) {
     Serial.print(value / FLOAT_SCALE);
     Serial.print(".");
@@ -553,37 +566,60 @@ int PIDcontrol(double target, double val, double dt, double kp, double ki, doubl
 void state0() {
   Serial.println("\n              **** RUNTIME ****");
   printAnalogue("Runtime remaining", runTimeRemaining, "min");
-  printAnalogue("Heparin time remaining", hepRunTimeRemaining, "min");
 }
 
 void state1() {
+  printAnalogue("Heparin time remaining", hepRunTimeRemaining, "min");
   Serial.println("\n              **** BLOOD CIRCUIT ****");
-  printAnalogueStatus("Arterial Pressure", artPressVal, "mmHg", alarmState(artPressureAlarm), true);
-  printAnalogueStatus("Venous Pressure", venPressVal, "mmHg", alarmState(venPressAlarm), true);
-  printAnalogueStatus("Blood Flow Rate", bloodFlowVal_S1, "mL/min", alarmState(bloodFlowAlarm), true);
-  printAnalogueStatus("Venous Temperature", venTempVal_S2, "\xB0""C", alarmState(venTempAlarm), true);
 }
 
 void state2() {
+  printAnalogueStatus("Arterial Pressure", artPressVal, "mmHg", alarmState(artPressureAlarm), true);
+  printAnalogueStatus("Venous Pressure", venPressVal, "mmHg", alarmState(venPressAlarm), true);
+}
+
+void state3() {
+  printAnalogueStatus("Blood Flow Rate", bloodFlowVal_S1, "mL/min", alarmState(bloodFlowAlarm), true);
+  printAnalogueStatus("Venous Temperature", venTempVal_S2, "\xB0""C", alarmState(venTempAlarm), true);
   Serial.println("\n              **** DIALYSATE CIRCUIT ****");
+}
+
+void state4() {
   printAnalogueStatus("Dialysate Pressure", dialPressVal, "mmHg", alarmState(dialPressAlarm), true);
   printAnalogueStatus("Waste Pressure", wastePressVal, "mmHg", alarmState(wastePressAlarm), true);
+}
+
+void state5() {
   printAnalogueStatus("Dialysate Conductivity", dialConductivityVal_S1, "mS/cm", alarmState(dialConductivityAlarm), true);
   printAnalogueStatus("Dialysate Temperature", dialTempVal_S1, "\xB0""C", alarmState(dialTempAlarm), true);
+}
+
+void state6() {
   printAnalogueStatus("pH", pHVal_S1, "pH", alarmState(pHAlarm), true);
   printAnalogueStatus("Water Level", waterLevelVal_S2, "%", alarmState(waterLevelAlarm), true);
+}
+
+void state7() {
   printAnalogueStatus("Blood Leak Detector", bloodLeakVal_S2, "", alarmState(bloodLeakAlarm), true);
   printAnalogueStatus("Dialysate Level", dialLevelVal_S2, "%", alarmState(dialLevelAlarm), true);
 }
 
-void state3() {
+void state8() {
   Serial.println("\n              **** DEVICES STATUS ****");
   printAnalogueStatus("Mixer", (mixerRunningFB_S1 * 100), "%", motorState(mixerRunningFB_S1), false);
+
+}
+
+void state9() {
   printAnalogueStatus("Blood Pump", (map(flow_PWM, 0, 255, 0, 100)), "%", motorState(bloodPumpRunningFB_S1), false);
   printAnalogueStatus("Dialysate Pump", (dialPumpRunningFB_S1 * 100), "%", motorState(dialPumpRunningFB_S1), false);
+}
+
+void state10() {
   printAnalogueStatus("Bypass Valve", (bypassValveFB_S1 * 100), "%", valveState(bypassValveFB_S1), false);
   printAnalogueStatus("Venous Clamp", (venousClampFB_S1 * 100), "%", servoState(venousClampFB_S1), false);
 }
+
 void printStatus() {
   if (cycleState == 0) {
     state0();
@@ -599,7 +635,66 @@ void printStatus() {
   }
   else if (cycleState == 3) {
     state3();
+    cycleState++;
+  }
+  else if (cycleState == 4) {
+    state4();
+    cycleState++;
+  }
+  else if (cycleState == 5) {
+    state5();
+    cycleState++;
+  }
+  else if (cycleState == 6) {
+    state6();
+    cycleState++;
+  }
+  else if (cycleState == 7) {
+    state7();
     cycleState = 0;
   }
+   else if (cycleState == 8) {
+    state8();
+    cycleState++;
+  }
+   else if (cycleState == 9) {
+    state9();
+    cycleState++;
+  }
+   else if (cycleState == 10) {
+    state10();
+    cycleState=0;
+  }
+}
 
+long SerialDataEntry(String guide, int minValue) {
+  char inputChar;
+  String inputStr;
+  long output = 0;
+
+  Serial.print(guide);
+
+  if (minValue == 0) {
+    minValue = 10;
+  }
+  while (output <= minValue) {
+    //inputStr = "";
+    while (Serial.available() > 0) {
+      inputChar = Serial.read();
+      if (inputChar >= '0' && inputChar <= '9') {
+        inputStr += inputChar;
+      }
+    }
+    output = inputStr.toInt();
+  }
+
+  if (inputChar == 'z') {
+    output = 0;
+    Serial.println(inputChar);
+  }
+  else {
+    Serial.println(output);
+  }
+
+  return output;
 }
