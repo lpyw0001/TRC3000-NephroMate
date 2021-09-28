@@ -61,8 +61,8 @@ bool cycle = true;
 // Output Objects
 Servo bypassValve;
 Servo venousClamp;
-const int CLAMP_ANGLE = 90;
-const int CLAMP_OFF = 0;
+const int CLAMP_ANGLE = 0;
+const int CLAMP_OFF = 90;
 bool startCommand = false; // From Master
 int flow_PWM = 0;
 
@@ -76,16 +76,19 @@ int dialClampActivePin = 9;
 int venClampActivePin = 10;
 int mixerIN2Pin = 11;
 
+// From Master
+volatile bool bypassValveCMD = false;
+
 // ----------- //
 // SETUP LOOP  //
 // ----------- //
 void setup() {
   Wire.begin(0x10); // join I2C bus as slave with address 0x10
   Wire.onRequest(IOSend);
-  bypassValve.write(0);
   bypassValve.attach(9);
-  venousClamp.write(0);
+  bypassValve.write(CLAMP_ANGLE);
   venousClamp.attach(10);
+  venousClamp.write(CLAMP_ANGLE);
   Wire.onReceive(MasterControl);
   pinMode(mixerIN1Pin, OUTPUT);
   pinMode(bloodPumpIN2Pin, OUTPUT);
@@ -112,19 +115,11 @@ void loop() {
 
     // Scale Analogue Inputs for Transmission to Master
     // ** TO DO **: Verify analogue operating values
-    /*dialConductivityScl = scaleInput(dialConductivityVal, 0, 1023, 10, 30);
-    pHScl = scaleInput(pHVal, 0, 1023, 0, 14);
-    dialTempScl = scaleInput(dialTempVal, 20, 400, 5, 60); // Should be 358 Tinkercad issue
-    bloodFlowScl = scaleInput(bloodFlowVal, 0, 1023, 30, 600);*/
-    
-    dialConductivityScl = map(dialConductivityVal, 0, 1023, 10*FLOAT_SCALE, 30*FLOAT_SCALE);
-    pHScl = map(pHVal, 0, 1023, 0*FLOAT_SCALE, 14*FLOAT_SCALE);
-    dialTempScl = map(dialTempVal, 20, 358, 25*FLOAT_SCALE, 60*FLOAT_SCALE); // Should be 358 Tinkercad issue
+    dialConductivityScl = map(dialConductivityVal, 0, 1023, 10 * FLOAT_SCALE, 30 * FLOAT_SCALE);
+    pHScl = map(pHVal, 0, 1023, 0 * FLOAT_SCALE, 14 * FLOAT_SCALE);
+    dialTempScl = map(dialTempVal, 20, 358, 25 * FLOAT_SCALE, 60 * FLOAT_SCALE); // Should be 358 Tinkercad issue
     bloodFlowScl = scaleInput(bloodFlowVal, 0, 1023, 30, 600);
-    
-    /*dialTempScl = map(dialTempVal, 20, 400, 5*FLOAT_SCALE, 60*FLOAT_SCALE); // Should be 358 Tinkercad issue
-    bloodFlowScl = map(bloodFlowVal, 0, 1023, 30*FLOAT_SCALE, 600*FLOAT_SCALE);*/
-    
+
     // Mixer runs at a fixed speed continuously
     digitalWrite(mixerIN1Pin, HIGH);
     digitalWrite(mixerIN2Pin, LOW);
@@ -149,22 +144,23 @@ void loop() {
       bloodPumpRunningFB = true;
       }*/
 
-    // Dialysate clamp: triggered when air is detected?
-    // Venous clamp: triggered when air is detected?
-    if (clampLines) {
-      venousClamp.write(CLAMP_ANGLE);
+    // Bypass Valve (command received from master)
+    // Diverts dialysate to waste when temperature, conductivity or pH alarm triggered
+    if (bypassValveCMD) {
       bypassValve.write(CLAMP_ANGLE);
-      venousClampFB = true;
       bypassValveFB = true;
     }
-    else {
-      venousClamp.write(CLAMP_OFF);
+    else{
       bypassValve.write(CLAMP_OFF);
+      bypassValveFB = false;
     }
-    
+
+    // Clamps activated when air detected
+    // If in main loop ensure clamps not active
+    venousClamp.write(CLAMP_OFF);
+    venousClampFB = false;
   }
 
-  
 
   // Stop all motors
   digitalWrite(mixerIN1Pin, LOW);
@@ -173,9 +169,9 @@ void loop() {
   digitalWrite(dialPumpIN2Pin, LOW);
   setMotor(0, 0, bloodPumpPWMPin, bloodPumpIN2Pin);
   venousClamp.write(CLAMP_ANGLE); // clamp lines if not running as a safety precaution
-  bypassValve.write(CLAMP_ANGLE);
-  venousClampFB = false;
-  bypassValveFB = false;
+  bypassValve.write(CLAMP_ANGLE); // divert to waste if machine not running
+  venousClampFB = true;
+  bypassValveFB = true;
   bloodPumpRunningFB = false;
   dialPumpRunningFB = false;
   mixerRunningFB = false;
@@ -202,6 +198,7 @@ void MasterControl(int dataSize) {
   I2C_readAnything(bloodPumpFault);
   I2C_readAnything(clampLines);
   I2C_readAnything(flow_PWM);
+  I2C_readAnything(bypassValveCMD);
 }
 // Scale Analogue Input  //
 // floating point version of the map() function
@@ -211,7 +208,7 @@ void MasterControl(int dataSize) {
 // x is the value to scale
 // y is the scaled value
 long scaleInput(long rawValue, long rawMin, long rawMax, long scaledMin, long scaledMax) {
-  return ((FLOAT_SCALE*(scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + FLOAT_SCALE*scaledMin);
+  return ((FLOAT_SCALE * (scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + FLOAT_SCALE * scaledMin);
 }
 
 // set PWM of motor

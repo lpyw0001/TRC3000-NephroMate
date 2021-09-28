@@ -58,7 +58,7 @@ long pHVal_S1 = 0;
 long dialTempVal_S1 = 0;
 long bloodFlowVal_S1 = 0;
 bool venousClampFB_S1 = false;
-bool bypassValveFB_S1 = false;
+bool bypassValveCMDFB_S1 = false;
 bool bloodPumpRunningFB_S1 = false;
 bool dialPumpRunningFB_S1 = false;
 bool mixerRunningFB_S1 = false;
@@ -151,6 +151,8 @@ bool hepFlag = false;
 
 // Other Process Control
 long desiredFluidRemoval = 0;
+bool bypassValveCMDPrev = false;
+bool bypassValveCMD = false;
 
 // ----------- //
 // SETUP LOOP  //
@@ -174,7 +176,7 @@ void setup() {
 // ---------- //
 void loop() {
   if (!serialInputFlag) {
-    Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"); //'Clear' serial monitor output
+    Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"); //'Clear' serial monitor output
     serialInputFlag = true;
   }
 
@@ -267,7 +269,7 @@ void loop() {
       I2C_readAnything(dialTempVal_S1);
       I2C_readAnything(bloodFlowVal_S1);
       I2C_readAnything(venousClampFB_S1);
-      I2C_readAnything(bypassValveFB_S1);
+      I2C_readAnything(bypassValveCMDFB_S1);
       I2C_readAnything(bloodPumpRunningFB_S1);
       I2C_readAnything(dialPumpRunningFB_S1);
       I2C_readAnything(mixerRunningFB_S1);
@@ -301,9 +303,9 @@ void loop() {
 
       // Check Device Fault Conditions
       bloodPumpFault = airDetectAlarm || venPressAlarm || artPressureAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm;
-
+      bypassValveCMD = pHAlarm || dialConductivityAlarm || dialTempAlarm || dialLevelAlarm;
+      
       // Stop Operating if air detected
-      // ** TO DO **: CLAMP LINE
       if (airDetectAlarm) {
         stopCommandISR();
       }
@@ -342,23 +344,22 @@ void loop() {
       int flow_PWMPrev;
 
       // Second Check if Emergency Stop Button has been pressed and relay stop to slave devices
-      // if (startCommandLatch != startCommandLatchPrev || wastePressureAlarm != wastePressureAlarmPrev || temp_PWM != temp_PWMPrev ) {
       Wire.beginTransmission(0x11); // slave 2
       I2C_writeAnything(startCommandLatch);
       I2C_writeAnything(temp_PWM); // heater motor PWM
       I2C_writeAnything(wastePressureAlarm);
       I2C_writeAnything(hepRunTimeRemaining);
       Wire.endTransmission();
-      //}
 
       // Send fault conditions to slave devices if any values have changed
       // Only one receive function so need to send all values
-      if (startCommandLatch != startCommandLatchPrev || bloodPumpFault != bloodPumpFaultPrev || airDetectAlarm != airDetectAlarmPrev || flow_PWM != flow_PWMPrev) {
+      if (startCommandLatch != startCommandLatchPrev || bloodPumpFault != bloodPumpFaultPrev || airDetectAlarm != airDetectAlarmPrev || flow_PWM != flow_PWMPrev || bypassValveCMD != bypassValveCMDPrev) {
         Wire.beginTransmission(0x10); // slave 1
         I2C_writeAnything(startCommandLatch);
         I2C_writeAnything(bloodPumpFault);
         I2C_writeAnything(airDetectAlarm); // Activate dialysate and venous clamps
         I2C_writeAnything(flow_PWM); // blood pump PWM
+        I2C_writeAnything(bypassValveCMD);
         Wire.endTransmission();
       }
 
@@ -369,6 +370,7 @@ void loop() {
       wastePressureAlarmPrev = wastePressureAlarm;
       temp_PWMPrev = temp_PWM;
       flow_PWMPrev = flow_PWM;
+      bypassValveCMDPrev = bypassValveCMD;
 
     }
     if (currentTime > runTimeMs && !finished) {
@@ -586,7 +588,7 @@ void state9() {
 }
 
 void state10() {
-  printAnalogueStatus("Bypass Valve", (bypassValveFB_S1 * 100), "%", valveState(bypassValveFB_S1), false);
+  printAnalogueStatus("Bypass Valve", (bypassValveCMDFB_S1 * 100), "%", valveState(bypassValveCMDFB_S1), false);
   printAnalogueStatus("Venous Clamp", (venousClampFB_S1 * 100), "%", servoState(venousClampFB_S1), false);
 }
 
@@ -621,7 +623,7 @@ void printStatus() {
   }
   else if (cycleState == 7) {
     state7();
-    cycleState = 0;
+    cycleState++;
   }
   else if (cycleState == 8) {
     state8();
@@ -645,7 +647,7 @@ long SerialDataEntry(String guide, int minValue) {
   Serial.print(guide);
 
   if (minValue == 0) {
-    minValue = 1;
+    minValue = 10;
   }
   while (output <= minValue) {
     while (Serial.available() > 0) {
@@ -654,7 +656,7 @@ long SerialDataEntry(String guide, int minValue) {
         inputStr += inputChar;
       }
       else if (inputChar == 'z') {
-        output = 2; // break loop
+        output = 100; // break loop
       }
     }
     if (inputChar != 'z') {
