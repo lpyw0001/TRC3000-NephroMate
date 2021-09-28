@@ -397,36 +397,6 @@ void stopCommandISR() {
 // ---------- //
 // FUNCTIONS  //
 // ---------- //
-// Update LCD Screen
-void displayUpdateValue(String text1, double value1, String text2, double value2) {
-  lcd.clear(); // clear screen and set cursor to (0,0)
-
-  unsigned int strLen1 = text1.length();
-  unsigned int strLen2 = text2.length();
-  String outputText1 = "";
-  String outputText2 = "";
-
-  if ((10 - strLen1) > 0) {
-    for (int i = 0; i < (10 - strLen1); i++) {
-      outputText1 += " ";
-    }
-  }
-  outputText1 = outputText1 + text1 + ": ";
-
-  if ((10 - strLen2) > 0) {
-    for (int i = 0; i < (10 - strLen2); i++) {
-      outputText2 += " ";
-    }
-  }
-  outputText2 = outputText2 + text2 + ": ";
-
-  lcd.print(outputText1);
-  lcd.print(value1);
-  lcd.setCursor(0, 1);
-  lcd.print(outputText2);
-  lcd.print(value2);
-}
-
 // Update LCD Screen (text only)
 void displayUpdateString(String text1, String text2, bool clear) {
   if (clear) {
