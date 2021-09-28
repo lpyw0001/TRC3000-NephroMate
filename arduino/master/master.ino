@@ -178,6 +178,10 @@ void loop() {
     serialInputFlag = true;
   }
 
+  if (!finished) {
+    displayUpdateString("Machine off.", "Press start.", 0);
+  }
+
   if (!runTimeFlag) {
     runTimeMin = SerialDataEntry("Session Duration (min): ", 99);
     runTimeFlag = true;
@@ -191,10 +195,6 @@ void loop() {
   if (!hepFlag) {
     hepRunTime = SerialDataEntry("Heparin Duration (min) 'z' for none: ", 0);
     hepFlag = true;
-  }
-
-  if (!finished) {
-    displayUpdateString("Machine off.", "Press start.", 0);
   }
 
   // Clear Alarms
@@ -397,38 +397,8 @@ void stopCommandISR() {
 // ---------- //
 // FUNCTIONS  //
 // ---------- //
-// Update LCD Screen
-void displayUpdateValue(String text1, double value1, String text2, double value2) {
-  lcd.clear(); // clear screen and set cursor to (0,0)
-
-  unsigned int strLen1 = text1.length();
-  unsigned int strLen2 = text2.length();
-  String outputText1 = "";
-  String outputText2 = "";
-
-  if ((10 - strLen1) > 0) {
-    for (int i = 0; i < (10 - strLen1); i++) {
-      outputText1 += " ";
-    }
-  }
-  outputText1 = outputText1 + text1 + ": ";
-
-  if ((10 - strLen2) > 0) {
-    for (int i = 0; i < (10 - strLen2); i++) {
-      outputText2 += " ";
-    }
-  }
-  outputText2 = outputText2 + text2 + ": ";
-
-  lcd.print(outputText1);
-  lcd.print(value1);
-  lcd.setCursor(0, 1);
-  lcd.print(outputText2);
-  lcd.print(value2);
-}
-
 // Update LCD Screen (text only)
-void displayUpdateString(String text1, String text2, bool clear) {
+void displayUpdateString(const char *text1, const char *text2, bool clear) {
   if (clear) {
     lcd.clear(); // clear screen and set cursor to (0,0)
   }
@@ -653,17 +623,17 @@ void printStatus() {
     state7();
     cycleState = 0;
   }
-   else if (cycleState == 8) {
+  else if (cycleState == 8) {
     state8();
     cycleState++;
   }
-   else if (cycleState == 9) {
+  else if (cycleState == 9) {
     state9();
     cycleState++;
   }
-   else if (cycleState == 10) {
+  else if (cycleState == 10) {
     state10();
-    cycleState=0;
+    cycleState = 0;
   }
 }
 
@@ -675,17 +645,21 @@ long SerialDataEntry(String guide, int minValue) {
   Serial.print(guide);
 
   if (minValue == 0) {
-    minValue = 10;
+    minValue = 1;
   }
   while (output <= minValue) {
-    //inputStr = "";
     while (Serial.available() > 0) {
       inputChar = Serial.read();
       if (inputChar >= '0' && inputChar <= '9') {
         inputStr += inputChar;
       }
+      else if (inputChar == 'z') {
+        output = 2; // break loop
+      }
     }
-    output = inputStr.toInt();
+    if (inputChar != 'z') {
+      output = inputStr.toInt();
+    }
   }
 
   if (inputChar == 'z') {
