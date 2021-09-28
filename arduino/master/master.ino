@@ -398,7 +398,7 @@ void stopCommandISR() {
 // FUNCTIONS  //
 // ---------- //
 // Update LCD Screen (text only)
-void displayUpdateString(String text1, String text2, bool clear) {
+void displayUpdateString(const char *text1, const char *text2, bool clear) {
   if (clear) {
     lcd.clear(); // clear screen and set cursor to (0,0)
   }
