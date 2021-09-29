@@ -131,13 +131,13 @@ LiquidCrystal lcd(12, 11, 6, 7, 4, 5); // (rs,enable,d4,d5,d6,d7)
 // Timing and Sequencing Variables
 unsigned long currentTime = 0;
 unsigned long prevTime = 0;
-double runTimeRemaining = 0;
+long runTimeRemaining = 0;
 unsigned int cyclePeriod = 80; // time in ms to alternate the screen values (note 40 in tinkercad =/= 40 real time)
 unsigned int runTimeMin = 10; // time in ms to perform hemodialysis (refer comment above) (4000)
 unsigned long runTimeMs = 10;
 unsigned int hepRunTime = 1000; // Duration to run Heparin infusion (200)
 unsigned long hepRunTimeMs = 10;
-double hepRunTimeRemaining = 0;
+long hepRunTimeRemaining = 0;
 int cycle = 0; // alternate values displayed on LCD screen and in serial monitor
 bool firstLoop = true;
 int cycleState = 0;
@@ -155,6 +155,8 @@ long desiredFluidRemoval = 0;
 bool bypassValveCMDPrev = false;
 bool bypassValveCMD = false;
 long patientWeight = 0;
+int UFRate = 0;
+bool UFFlag = false;
 
 // ----------- //
 // SETUP LOOP  //
@@ -178,13 +180,13 @@ void setup() {
 // ---------- //
 void loop() {
 
-  const String sesDurStr = "Session Duration (min): ";
-  const String desFluidStr = "Desired Fluid Removal (L): ";
+  const String sesDurStr = "Duration (min): ";
+  const String desFluidStr = "Fluid Removal (L): ";
   const String weightStr = "Patient weight (kg): ";
   const String hepStr = "Hep Duration (min) 'z' for none: " ;
-  
+
   if (!serialInputFlag) {
-    Serial.println(F("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")); //'Clear' serial monitor output
+    //Serial.println(F("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")); //'Clear' serial monitor output
     serialInputFlag = true;
   }
 
@@ -199,6 +201,7 @@ void loop() {
 
   if (!fluidFlag) {
     desiredFluidRemoval = SerialDataEntry(desFluidStr, 1);
+    desiredFluidRemoval = desiredFluidRemoval * 1000; //convert to mL
     fluidFlag = true;
   }
 
@@ -210,6 +213,25 @@ void loop() {
   if (!hepFlag) {
     hepRunTime = SerialDataEntry(hepStr, 0);
     hepFlag = true;
+  }
+
+  UFRate = FLOAT_SCALE * ((FLOAT_SCALE * desiredFluidRemoval) / (FLOAT_SCALE * runTimeMin / 60)) / (FLOAT_SCALE * patientWeight);
+  if (!UFFlag && UFRate != 0) {
+    Serial.print(F("UF Rate: "));
+    Serial.print(UFRate / FLOAT_SCALE);
+    Serial.print(F("."));
+    Serial.print(UFRate % FLOAT_SCALE);
+    Serial.println(F(" mL/h/kg"));
+  }
+  if ((UFRate / FLOAT_SCALE) > 13) {
+    Serial.println(F("UF Rate too high"));
+    hepFlag = false;
+    weightFlag = false;
+    fluidFlag = false;
+    runTimeFlag = false;
+  }
+  else if (UFRate > 0) {
+    UFFlag = true;
   }
 
   // Clear Alarms
@@ -239,7 +261,7 @@ void loop() {
         Wire.beginTransmission(0x11);
         I2C_writeAnything(startCommandLatch);
         Wire.endTransmission();
-        Serial.println(F("\n\nHaemodialysis started\n"));
+        Serial.println(F("\n\nSession started\n"));
         displayUpdateString("Haemodialysis", "machine running", 1);
         delay(10);
       }
@@ -317,7 +339,7 @@ void loop() {
       // Check Device Fault Conditions
       bloodPumpFault = airDetectAlarm || venPressAlarm || artPressureAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm;
       bypassValveCMD = pHAlarm || dialConductivityAlarm || dialTempAlarm || dialLevelAlarm;
-      
+
       // Stop Operating if air detected
       if (airDetectAlarm) {
         stopCommandISR();
@@ -387,7 +409,7 @@ void loop() {
 
     }
     if (currentTime > runTimeMs && !finished) {
-      Serial.println(F("\nHaemodialysis complete\n"));
+      Serial.println(F("\nDialysis complete\n"));
       displayUpdateString("Haemodialysis", "Complete", 1);
       finished = true;
     }
@@ -406,7 +428,7 @@ void startCommandISR() {
 void stopCommandISR() {
   startCommandLatch = false;
   displayUpdateString("Machine off.", "Press start.", 1);
-  Serial.println(F("\n\n=======\n EMERGENCY STOP \n=======\n\n"));
+  Serial.println(F("\n\n===\n EMERGENCY STOP \n===\n\n"));
 }
 
 // ---------- //
@@ -496,18 +518,22 @@ void printAnalogueStatus(String description, long value, String units, String st
     }
   }
 
-  Serial.print(description + ": ");
+  Serial.print(description);
+  Serial.print(": ");
 
   if (scale) {
     Serial.print(value / FLOAT_SCALE);
-    Serial.print(".");
+    Serial.print(F("."));
     Serial.print(abs(value % FLOAT_SCALE));
     Serial.println(" " + units + ": " + state);
   }
   else {
-    Serial.println((String)value + " " + units + "   : " + state); // additional spaces for padding
+    Serial.print((String)value);
+    Serial.print(" "); // additional spaces for padding
+    Serial.print(units);
+    Serial.print("   : " ); // additional spaces for padding
+    Serial.println(state);
   }
-
 }
 
 void printAnalogue(String description, double value, String units) {
@@ -524,7 +550,11 @@ void printAnalogue(String description, double value, String units) {
     }
   }
 
-  Serial.println((String)description + ": " + value + " " + units);
+  Serial.print(description);
+  Serial.print(": ");
+  Serial.print((String)value);
+  Serial.print(" ");
+  Serial.println(units);
 }
 
 String servoState(bool state) {
@@ -550,54 +580,53 @@ int PIDcontrol(int target, int val, int dt, int kp, int ki, int kd, int & eprev,
 }
 void state0() {
   Serial.println(F("\n**** RUNTIME ****"));
-  printAnalogue("Session time remaining", runTimeRemaining, "min");
+  printAnalogue("Session time rem", runTimeRemaining, "min");
 }
 
 void state1() {
-  printAnalogue("Heparin time remaining", hepRunTimeRemaining, "min");
+  printAnalogue("Hep time rem", hepRunTimeRemaining, "min");
   Serial.println(F("\n**** BLOOD CIRCUIT ****"));
 }
 
 void state2() {
-  printAnalogueStatus("Arterial Pressure", artPressVal, "mmHg", alarmState(artPressureAlarm), true);
-  printAnalogueStatus("Venous Pressure", venPressVal, "mmHg", alarmState(venPressAlarm), true);
+  printAnalogueStatus("Arterial Press", artPressVal, "mmHg", alarmState(artPressureAlarm), true);
+  printAnalogueStatus("Venous Press", venPressVal, "mmHg", alarmState(venPressAlarm), true);
 }
 
 void state3() {
-  printAnalogueStatus("Blood Flow Rate", bloodFlowVal_S1, "mL/min", alarmState(bloodFlowAlarm), true);
-  printAnalogueStatus("Venous Temperature", venTempVal_S2, "\xB0""C", alarmState(venTempAlarm), true);
+  printAnalogueStatus("Bld Flow", bloodFlowVal_S1, "mL/min", alarmState(bloodFlowAlarm), true);
+  printAnalogueStatus("Venous Temp", venTempVal_S2, "\xB0""C", alarmState(venTempAlarm), true);
   Serial.println(F("\n**** DIALYSATE CIRCUIT ****"));
 }
 
 void state4() {
-  printAnalogueStatus("Dialysate Pressure", dialPressVal, "mmHg", alarmState(dialPressAlarm), true);
-  printAnalogueStatus("Waste Pressure", wastePressVal, "mmHg", alarmState(wastePressAlarm), true);
+  printAnalogueStatus("Dial Press", dialPressVal, "mmHg", alarmState(dialPressAlarm), true);
+  printAnalogueStatus("Waste Press", wastePressVal, "mmHg", alarmState(wastePressAlarm), true);
 }
 
 void state5() {
-  printAnalogueStatus("Dialysate Conductivity", dialConductivityVal_S1, "mS/cm", alarmState(dialConductivityAlarm), true);
-  printAnalogueStatus("Dialysate Temperature", dialTempVal_S1, "\xB0""C", alarmState(dialTempAlarm), true);
+  printAnalogueStatus("Dial Cond", dialConductivityVal_S1, "mS/cm", alarmState(dialConductivityAlarm), true);
+  printAnalogueStatus("Dial Temp", dialTempVal_S1, "\xB0""C", alarmState(dialTempAlarm), true);
 }
 
 void state6() {
   printAnalogueStatus("pH", pHVal_S1, "pH", alarmState(pHAlarm), true);
-  printAnalogueStatus("Water Level", waterLevelVal_S2, "%", alarmState(waterLevelAlarm), true);
+  printAnalogueStatus("Water Lvl", waterLevelVal_S2, "%", alarmState(waterLevelAlarm), true);
 }
 
 void state7() {
-  printAnalogueStatus("Blood Leak Detector", bloodLeakVal_S2, "", alarmState(bloodLeakAlarm), true);
-  printAnalogueStatus("Dialysate Level", dialLevelVal_S2, "%", alarmState(dialLevelAlarm), true);
+  printAnalogueStatus("Bld Leak Detect", bloodLeakVal_S2, "", alarmState(bloodLeakAlarm), true);
+  printAnalogueStatus("Dial Lvl", dialLevelVal_S2, "%", alarmState(dialLevelAlarm), true);
 }
 
 void state8() {
   Serial.println(F("\n**** DEVICES STATUS ****"));
-  printAnalogueStatus("Mixer", (mixerRunningFB_S1 * 100), "%", motorState(mixerRunningFB_S1), false);
-
+  printAnalogueStatus("Bld Pump", (map(flow_PWM, 0, 255, 0, 100)), "%", motorState(bloodPumpRunningFB_S1), false);
 }
 
 void state9() {
-  printAnalogueStatus("Blood Pump", (map(flow_PWM, 0, 255, 0, 100)), "%", motorState(bloodPumpRunningFB_S1), false);
-  printAnalogueStatus("Dialysate Pump", (dialPumpRunningFB_S1 * 100), "%", motorState(dialPumpRunningFB_S1), false);
+  printAnalogueStatus("UF Pump", wastePumpRunningFB_S2, "%", motorState(wastePumpRunningFB_S2), false);
+  printAnalogueStatus("Heater", (heaterRunningFB_S2 * 100), "%", motorState(heaterRunningFB_S2), false);
 }
 
 void state10() {
