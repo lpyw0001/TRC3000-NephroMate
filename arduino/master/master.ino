@@ -89,21 +89,21 @@ const long FLOW_LOW = 20000;
 const int BLOOD_LEAK = 1000; // TO DO update value
 
 // PID Constants & variables
-const double TARGET_TEMP = 37; // target temperature (degrees Celsius) for dialysate solution
-const double TARGET_FLOW = 250; // target user-configurable value in mL/min (usually 250-300, or 300-500, as prescribed by doctor)
-const double kp_temp = 1;
-const double ki_temp = 0;
-const double kd_temp = 0;
-const double kp_flow = 1;
-const double ki_flow = 0;
-const double kd_flow = 0;
+int TARGET_TEMP = 37; // target temperature (degrees Celsius) for dialysate solution
+int TARGET_FLOW = 250; // target user-configurable value in mL/min (usually 250-300, or 300-500, as prescribed by doctor)
+int kp_temp = 1;
+int ki_temp = 0;
+int kd_temp = 0;
+int kp_flow = 1;
+int ki_flow = 0;
+int kd_flow = 0;
 int flow_PWM;
 int temp_PWM;
 long prevT = 0;
-double eprev_temp = 0;
-double eintegral_temp = 0;
-double eprev_flow = 0;
-double eintegral_flow = 0;
+int eprev_temp = 0;
+int eintegral_temp = 0;
+int eprev_flow = 0;
+int eintegral_flow = 0;
 
 // Alarm Variables
 bool artPressureAlarm = false;
@@ -148,11 +148,13 @@ bool serialInputFlag = false;
 bool fluidFlag = false;
 bool runTimeFlag = false;
 bool hepFlag = false;
+bool weightFlag = false;
 
 // Other Process Control
 long desiredFluidRemoval = 0;
 bool bypassValveCMDPrev = false;
 bool bypassValveCMD = false;
+long patientWeight = 0;
 
 // ----------- //
 // SETUP LOOP  //
@@ -175,8 +177,14 @@ void setup() {
 // MAIN LOOP  //
 // ---------- //
 void loop() {
+
+  const String sesDurStr = "Session Duration (min): ";
+  const String desFluidStr = "Desired Fluid Removal (L): ";
+  const String weightStr = "Patient weight (kg): ";
+  const String hepStr = "Hep Duration (min) 'z' for none: " ;
+  
   if (!serialInputFlag) {
-    Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"); //'Clear' serial monitor output
+    Serial.println(F("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")); //'Clear' serial monitor output
     serialInputFlag = true;
   }
 
@@ -185,17 +193,22 @@ void loop() {
   }
 
   if (!runTimeFlag) {
-    runTimeMin = SerialDataEntry("Session Duration (min): ", 99);
+    runTimeMin = SerialDataEntry(sesDurStr, 99);
     runTimeFlag = true;
   }
 
   if (!fluidFlag) {
-    desiredFluidRemoval = SerialDataEntry("Desired Fluid Removal (L): ", 1);
+    desiredFluidRemoval = SerialDataEntry(desFluidStr, 1);
     fluidFlag = true;
   }
 
+  if (!weightFlag) {
+    patientWeight = SerialDataEntry(weightStr, 10);
+    weightFlag = true;
+  }
+
   if (!hepFlag) {
-    hepRunTime = SerialDataEntry("Heparin Duration (min) 'z' for none: ", 0);
+    hepRunTime = SerialDataEntry(hepStr, 0);
     hepFlag = true;
   }
 
@@ -226,7 +239,7 @@ void loop() {
         Wire.beginTransmission(0x11);
         I2C_writeAnything(startCommandLatch);
         Wire.endTransmission();
-        Serial.println("\n\nHaemodialysis started\n");
+        Serial.println(F("\n\nHaemodialysis started\n"));
         displayUpdateString("Haemodialysis", "machine running", 1);
         delay(10);
       }
@@ -374,7 +387,7 @@ void loop() {
 
     }
     if (currentTime > runTimeMs && !finished) {
-      Serial.println("\nHaemodialysis complete\n");
+      Serial.println(F("\nHaemodialysis complete\n"));
       displayUpdateString("Haemodialysis", "Complete", 1);
       finished = true;
     }
@@ -393,7 +406,7 @@ void startCommandISR() {
 void stopCommandISR() {
   startCommandLatch = false;
   displayUpdateString("Machine off.", "Press start.", 1);
-  Serial.println("\n\n======================\n EMERGENCY STOP \n======================\n\n");
+  Serial.println(F("\n\n=======\n EMERGENCY STOP \n=======\n\n"));
 }
 
 // ---------- //
@@ -526,9 +539,9 @@ String motorState(bool state) {
   return (state) ? "Running" : "Off";
 }
 
-int PIDcontrol(double target, double val, double dt, double kp, double ki, double kd, double & eprev, double & eintegral) {
-  double e = target - val;
-  double de_dt = (e - eprev) / dt;
+int PIDcontrol(int target, int val, int dt, int kp, int ki, int kd, int & eprev, int & eintegral) {
+  int e = target - val;
+  int de_dt = (e - eprev) / dt;
   eintegral = eintegral + e * dt;
   eprev = e;
   int u = (int) kp * e + ki * eintegral + kd * de_dt;
@@ -536,13 +549,13 @@ int PIDcontrol(double target, double val, double dt, double kp, double ki, doubl
   if (u > 0) return min(abs(u), 255); // maximum PWM value is 255
 }
 void state0() {
-  Serial.println("\n              **** RUNTIME ****");
-  printAnalogue("Runtime remaining", runTimeRemaining, "min");
+  Serial.println(F("\n**** RUNTIME ****"));
+  printAnalogue("Session time remaining", runTimeRemaining, "min");
 }
 
 void state1() {
   printAnalogue("Heparin time remaining", hepRunTimeRemaining, "min");
-  Serial.println("\n              **** BLOOD CIRCUIT ****");
+  Serial.println(F("\n**** BLOOD CIRCUIT ****"));
 }
 
 void state2() {
@@ -553,7 +566,7 @@ void state2() {
 void state3() {
   printAnalogueStatus("Blood Flow Rate", bloodFlowVal_S1, "mL/min", alarmState(bloodFlowAlarm), true);
   printAnalogueStatus("Venous Temperature", venTempVal_S2, "\xB0""C", alarmState(venTempAlarm), true);
-  Serial.println("\n              **** DIALYSATE CIRCUIT ****");
+  Serial.println(F("\n**** DIALYSATE CIRCUIT ****"));
 }
 
 void state4() {
@@ -577,7 +590,7 @@ void state7() {
 }
 
 void state8() {
-  Serial.println("\n              **** DEVICES STATUS ****");
+  Serial.println(F("\n**** DEVICES STATUS ****"));
   printAnalogueStatus("Mixer", (mixerRunningFB_S1 * 100), "%", motorState(mixerRunningFB_S1), false);
 
 }
@@ -639,7 +652,7 @@ void printStatus() {
   }
 }
 
-long SerialDataEntry(String guide, int minValue) {
+long SerialDataEntry(const String &guide, int minValue) {
   char inputChar;
   String inputStr;
   long output = 0;
