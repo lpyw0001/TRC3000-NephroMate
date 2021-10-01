@@ -78,6 +78,23 @@ int mixerIN2Pin = 11;
 
 // From Master
 volatile bool bypassValveCMD = false;
+volatile bool dialPumpCMD = false;
+
+// Serial Data Entry
+bool serialInputFlag = false;
+bool fluidFlag = false;
+bool runTimeFlag = false;
+bool hepFlag = false;
+bool weightFlag = false;
+bool UFFlag = false;
+bool slave1SerialData = false;
+int desiredFluidRemoval = 0;
+long desiredFluidRemovalCalc;
+int patientWeight = 0;
+long UFRateCalc = 0;
+int UFRate = 0;
+int runTimeMin = 0;
+int hepRunTime = 0;
 
 // ----------- //
 // SETUP LOOP  //
@@ -98,6 +115,7 @@ void setup() {
   pinMode(dialClampActivePin, OUTPUT);
   pinMode(venClampActivePin, OUTPUT);
   pinMode(mixerIN2Pin, OUTPUT);
+  Serial.begin(9600);
 }
 
 // ---------- //
@@ -105,6 +123,63 @@ void setup() {
 // ---------- //
 
 void loop() {
+
+  const String sesDurStr = "Duration (min): ";
+  const String desFluidStr = "Fluid Removal (L): ";
+  const String weightStr = "Patient weight (kg): ";
+  const String hepStr = "Hep Duration (min) 'z' for none: " ;
+
+  if (!serialInputFlag) {
+    Serial.println(F("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")); //'Clear' serial monitor output
+    serialInputFlag = true;
+  }
+
+  if (!runTimeFlag) {
+    runTimeMin = (int)SerialDataEntry(sesDurStr, 99);
+    runTimeFlag = true;
+  }
+
+  if (!fluidFlag) {
+    desiredFluidRemoval = SerialDataEntry(desFluidStr, 1);
+    desiredFluidRemovalCalc = desiredFluidRemoval * 1000;
+    fluidFlag = true;
+  }
+
+  if (!weightFlag) {
+    patientWeight = SerialDataEntry(weightStr, 10);
+    weightFlag = true;
+  }
+
+  if (!hepFlag) {
+    hepRunTime = SerialDataEntry(hepStr, 0);
+    hepFlag = true;
+  }
+
+  UFRateCalc = FLOAT_SCALE * ((FLOAT_SCALE * desiredFluidRemovalCalc) / (FLOAT_SCALE * runTimeMin / 60)) / (FLOAT_SCALE * patientWeight);
+  UFRate = (int)(FLOAT_SCALE * UFRateCalc);
+
+  if (!UFFlag && UFRate != 0) {
+    Serial.print(F("UF Rate: "));
+    Serial.print(UFRate / FLOAT_SCALE);
+    Serial.print(F("."));
+    Serial.print(UFRate % FLOAT_SCALE);
+    Serial.println(F(" mL/h/kg"));
+  }
+
+  if ((UFRate / FLOAT_SCALE) > 13) {
+    Serial.println(F("UF Rate too high"));
+    hepFlag = false;
+    weightFlag = false;
+    fluidFlag = false;
+    runTimeFlag = false;
+  }
+  else if (UFRate > 0) {
+    UFFlag = true;
+    UFRate = UFRate / 100;
+  }
+
+  slave1SerialData = (runTimeMin > 0) && (desiredFluidRemoval > 0) && (patientWeight > 0) && (UFRate > 0);
+
   while (startCommand) {
 
     // Read Analogue Inputs
@@ -118,17 +193,25 @@ void loop() {
     dialConductivityScl = map(dialConductivityVal, 0, 1023, 10 * FLOAT_SCALE, 30 * FLOAT_SCALE);
     pHScl = map(pHVal, 0, 1023, 0 * FLOAT_SCALE, 14 * FLOAT_SCALE);
     dialTempScl = map(dialTempVal, 20, 358, 25 * FLOAT_SCALE, 60 * FLOAT_SCALE); // Should be 358 Tinkercad issue
-    bloodFlowScl = scaleInput(bloodFlowVal, 0, 1023, 30, 600);
+    bloodFlowScl = map(bloodFlowVal, 0, 1023, 30 * FLOAT_SCALE, 600 * FLOAT_SCALE);
 
     // Mixer runs at a fixed speed continuously
     digitalWrite(mixerIN1Pin, HIGH);
     digitalWrite(mixerIN2Pin, LOW);
     mixerRunningFB = true;
 
-    // Dialysate pump runs at a fixed speed continuously
-    digitalWrite(dialPumpIN1Pin, HIGH);
-    digitalWrite(dialPumpIN2Pin, LOW);
-    dialPumpRunningFB = true;
+    // Dialysate pump as long as no level alarm
+    if (dialPumpCMD) {
+      digitalWrite(dialPumpIN1Pin, HIGH);
+      digitalWrite(dialPumpIN2Pin, LOW);
+      dialPumpRunningFB = true;
+    }
+    else {
+      digitalWrite(dialPumpIN1Pin, LOW);
+      digitalWrite(dialPumpIN2Pin, LOW);
+      dialPumpRunningFB = false;
+    }
+
 
     // Blood pump PID controlled
     int dir = (int) !bloodPumpFault;
@@ -150,7 +233,7 @@ void loop() {
       bypassValve.write(CLAMP_ANGLE);
       bypassValveFB = true;
     }
-    else{
+    else {
       bypassValve.write(CLAMP_OFF);
       bypassValveFB = false;
     }
@@ -182,15 +265,24 @@ void loop() {
 // ---------- //
 // Transmit IO Data when requested by master
 void IOSend() {
-  I2C_writeAnything(dialConductivityScl);
-  I2C_writeAnything(pHScl);
-  I2C_writeAnything(dialTempScl);
-  I2C_writeAnything(bloodFlowScl);
-  I2C_writeAnything(venousClampFB);
-  I2C_writeAnything(bypassValveFB);
-  I2C_writeAnything(bloodPumpRunningFB);
-  I2C_writeAnything(dialPumpRunningFB);
-  I2C_writeAnything(mixerRunningFB);
+  if (slave1SerialData && !startCommand) {
+    I2C_writeAnything(runTimeMin);
+    I2C_writeAnything(desiredFluidRemoval);
+    I2C_writeAnything(patientWeight);
+    I2C_writeAnything(hepRunTime);
+    I2C_writeAnything(UFRate);
+  }
+  else {
+    I2C_writeAnything(dialConductivityScl);
+    I2C_writeAnything(pHScl);
+    I2C_writeAnything(dialTempScl);
+    I2C_writeAnything(bloodFlowScl);
+    I2C_writeAnything(venousClampFB);
+    I2C_writeAnything(bypassValveFB);
+    I2C_writeAnything(bloodPumpRunningFB);
+    I2C_writeAnything(dialPumpRunningFB);
+    I2C_writeAnything(mixerRunningFB);
+  }
 }
 
 void MasterControl(int dataSize) {
@@ -199,6 +291,8 @@ void MasterControl(int dataSize) {
   I2C_readAnything(clampLines);
   I2C_readAnything(flow_PWM);
   I2C_readAnything(bypassValveCMD);
+  I2C_readAnything(dialPumpCMD);
+  dialPumpCMD = !dialPumpCMD; // Invert polarity
 }
 // Scale Analogue Input  //
 // floating point version of the map() function
@@ -229,4 +323,40 @@ bool setMotor(int dir, int pwmVal, int pwm, int in1) {
   }
 
   return (pwm > 0 && dir == 1);
+}
+
+long SerialDataEntry(const String &guide, int minValue) {
+  char inputChar;
+  String inputStr;
+  long output = 0;
+
+  Serial.print(guide);
+
+  if (minValue == 0) {
+    minValue = 10;
+  }
+  while (output <= minValue) {
+    while (Serial.available() > 0) {
+      inputChar = Serial.read();
+      if (inputChar >= '0' && inputChar <= '9') {
+        inputStr += inputChar;
+      }
+      else if (inputChar == 'z') {
+        output = 100; // break loop
+      }
+    }
+    if (inputChar != 'z') {
+      output = inputStr.toInt();
+    }
+  }
+
+  if (inputChar == 'z') {
+    output = 0;
+    Serial.println(inputChar);
+  }
+  else {
+    Serial.println(output);
+  }
+
+  return output;
 }

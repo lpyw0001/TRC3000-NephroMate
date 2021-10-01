@@ -133,9 +133,9 @@ unsigned long currentTime = 0;
 unsigned long prevTime = 0;
 long runTimeRemaining = 0;
 unsigned int cyclePeriod = 80; // time in ms to alternate the screen values (note 40 in tinkercad =/= 40 real time)
-unsigned int runTimeMin = 10; // time in ms to perform hemodialysis (refer comment above) (4000)
+volatile int runTimeMin = 10; // time in ms to perform hemodialysis (refer comment above) (4000)
 unsigned long runTimeMs = 10;
-unsigned int hepRunTime = 1000; // Duration to run Heparin infusion (200)
+volatile int hepRunTime = 10; // Duration to run Heparin infusion (200)
 unsigned long hepRunTimeMs = 10;
 long hepRunTimeRemaining = 0;
 int cycle = 0; // alternate values displayed on LCD screen and in serial monitor
@@ -145,17 +145,14 @@ bool finished = false;
 int lcdCycleState = 0;
 int flagCount = 0;
 bool serialInputFlag = false;
-bool fluidFlag = false;
-bool runTimeFlag = false;
-bool hepFlag = false;
-bool weightFlag = false;
+bool slave1SerialData = false;
 
 // Other Process Control
-long desiredFluidRemoval = 0;
+volatile int desiredFluidRemoval=0;
+volatile int UFRate=0;
+volatile int patientWeight=0;
 bool bypassValveCMDPrev = false;
 bool bypassValveCMD = false;
-long patientWeight = 0;
-int UFRate = 0;
 bool UFFlag = false;
 
 // ----------- //
@@ -180,13 +177,19 @@ void setup() {
 // ---------- //
 void loop() {
 
-  const String sesDurStr = "Duration (min): ";
-  const String desFluidStr = "Fluid Removal (L): ";
-  const String weightStr = "Patient weight (kg): ";
-  const String hepStr = "Hep Duration (min) 'z' for none: " ;
+  // Retrieve Serial Input Data from Slave 1
+  if (!slave1SerialData) {
+    Wire.requestFrom(0x10, 10); // 5 x int
+    I2C_readAnything(runTimeMin);
+    I2C_readAnything(desiredFluidRemoval);
+    I2C_readAnything(patientWeight);
+    I2C_readAnything(hepRunTime);
+    I2C_readAnything(UFRate);
+  }
 
+  //'Clear' serial monitor output
   if (!serialInputFlag) {
-    //Serial.println(F("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")); //'Clear' serial monitor output
+    Serial.println(F("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"));
     serialInputFlag = true;
   }
 
@@ -194,45 +197,7 @@ void loop() {
     displayUpdateString("Machine off.", "Press start.", 0);
   }
 
-  if (!runTimeFlag) {
-    runTimeMin = SerialDataEntry(sesDurStr, 99);
-    runTimeFlag = true;
-  }
-
-  if (!fluidFlag) {
-    desiredFluidRemoval = SerialDataEntry(desFluidStr, 1);
-    desiredFluidRemoval = desiredFluidRemoval * 1000; //convert to mL
-    fluidFlag = true;
-  }
-
-  if (!weightFlag) {
-    patientWeight = SerialDataEntry(weightStr, 10);
-    weightFlag = true;
-  }
-
-  if (!hepFlag) {
-    hepRunTime = SerialDataEntry(hepStr, 0);
-    hepFlag = true;
-  }
-
-  UFRate = FLOAT_SCALE * ((FLOAT_SCALE * desiredFluidRemoval) / (FLOAT_SCALE * runTimeMin / 60)) / (FLOAT_SCALE * patientWeight);
-  if (!UFFlag && UFRate != 0) {
-    Serial.print(F("UF Rate: "));
-    Serial.print(UFRate / FLOAT_SCALE);
-    Serial.print(F("."));
-    Serial.print(UFRate % FLOAT_SCALE);
-    Serial.println(F(" mL/h/kg"));
-  }
-  if ((UFRate / FLOAT_SCALE) > 13) {
-    Serial.println(F("UF Rate too high"));
-    hepFlag = false;
-    weightFlag = false;
-    fluidFlag = false;
-    runTimeFlag = false;
-  }
-  else if (UFRate > 0) {
-    UFFlag = true;
-  }
+  slave1SerialData = (runTimeMin > 0) && (desiredFluidRemoval > 0) && (patientWeight > 0) && (UFRate > 0);
 
   // Clear Alarms
   digitalWrite(alarmLEDPin, LOW);
@@ -247,7 +212,7 @@ void loop() {
   I2C_writeAnything(false);
   Wire.endTransmission();
 
-  if (runTimeFlag && fluidFlag) {
+  if (slave1SerialData) {
     while ((startCommandLatch) & (currentTime < runTimeMs)) {
       flagCount = 0;
       if (firstLoop) {
@@ -395,6 +360,7 @@ void loop() {
         I2C_writeAnything(airDetectAlarm); // Activate dialysate and venous clamps
         I2C_writeAnything(flow_PWM); // blood pump PWM
         I2C_writeAnything(bypassValveCMD);
+        I2C_writeAnything(dialLevelAlarm);
         Wire.endTransmission();
       }
 
@@ -627,6 +593,7 @@ void state8() {
 void state9() {
   printAnalogueStatus("UF Pump", wastePumpRunningFB_S2, "%", motorState(wastePumpRunningFB_S2), false);
   printAnalogueStatus("Heater", (heaterRunningFB_S2 * 100), "%", motorState(heaterRunningFB_S2), false);
+  printAnalogueStatus("Dial Pump", (dialPumpRunningFB_S1 * 100), "%", motorState(dialPumpRunningFB_S1), false);
 }
 
 void state10() {
@@ -679,40 +646,4 @@ void printStatus() {
     state10();
     cycleState = 0;
   }
-}
-
-long SerialDataEntry(const String &guide, int minValue) {
-  char inputChar;
-  String inputStr;
-  long output = 0;
-
-  Serial.print(guide);
-
-  if (minValue == 0) {
-    minValue = 10;
-  }
-  while (output <= minValue) {
-    while (Serial.available() > 0) {
-      inputChar = Serial.read();
-      if (inputChar >= '0' && inputChar <= '9') {
-        inputStr += inputChar;
-      }
-      else if (inputChar == 'z') {
-        output = 100; // break loop
-      }
-    }
-    if (inputChar != 'z') {
-      output = inputStr.toInt();
-    }
-  }
-
-  if (inputChar == 'z') {
-    output = 0;
-    Serial.println(inputChar);
-  }
-  else {
-    Serial.println(output);
-  }
-
-  return output;
 }
