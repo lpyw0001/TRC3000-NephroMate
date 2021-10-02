@@ -124,6 +124,7 @@ bool wastePressureAlarm = false;
 bool anyAlarmTriggered = false;
 bool bloodPumpFault = false;
 bool wastePressureAlarmPrev = false;
+bool dialAlarm = false;
 
 // Initialise LCD
 LiquidCrystal lcd(12, 11, 6, 7, 4, 5); // (rs,enable,d4,d5,d6,d7)
@@ -300,7 +301,8 @@ void loop() {
       wastePressureAlarm = wastePressVal > PRESSURE_HIGH;
 
       anyAlarmTriggered = artPressureAlarm || venPressAlarm || airDetectAlarm || dialConductivityAlarm || pHAlarm || dialTempAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm || bloodLeakAlarm || dialLevelAlarm;
-
+      dialAlarm =  dialConductivityAlarm || pHAlarm || dialTempAlarm ||  dialLevelAlarm;
+      
       // Check Device Fault Conditions
       bloodPumpFault = airDetectAlarm || venPressAlarm || artPressureAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm;
       bypassValveCMD = pHAlarm || dialConductivityAlarm || dialTempAlarm || dialLevelAlarm;
@@ -349,6 +351,7 @@ void loop() {
       I2C_writeAnything(temp_PWM); // heater motor PWM
       I2C_writeAnything(wastePressureAlarm);
       I2C_writeAnything(hepRunTimeRemaining);
+      I2C_writeAnything(UFRate);
       Wire.endTransmission();
 
       // Send fault conditions to slave devices if any values have changed
@@ -360,7 +363,7 @@ void loop() {
         I2C_writeAnything(airDetectAlarm); // Activate dialysate and venous clamps
         I2C_writeAnything(flow_PWM); // blood pump PWM
         I2C_writeAnything(bypassValveCMD);
-        I2C_writeAnything(dialLevelAlarm);
+        I2C_writeAnything(dialAlarm);
         Wire.endTransmission();
       }
 
@@ -591,7 +594,7 @@ void state8() {
 }
 
 void state9() {
-  printAnalogueStatus("UF Pump", wastePumpRunningFB_S2, "%", motorState(wastePumpRunningFB_S2), false);
+  printAnalogueStatus("UF Pump", map(UFRate,0,13,0,100), "%", motorState(wastePumpRunningFB_S2), false);
   printAnalogueStatus("Heater", (heaterRunningFB_S2 * 100), "%", motorState(heaterRunningFB_S2), false);
   printAnalogueStatus("Dial Pump", (dialPumpRunningFB_S1 * 100), "%", motorState(dialPumpRunningFB_S1), false);
 }

@@ -51,6 +51,7 @@ bool bypassValveFB = false;
 bool bloodPumpRunningFB = false;
 bool dialPumpRunningFB = false;
 bool mixerRunningFB = false;
+bool reverseOsmosisRunningFB = false;
 
 // Initialise LCD
 unsigned long currentTime;
@@ -67,14 +68,16 @@ bool startCommand = false; // From Master
 int flow_PWM = 0;
 
 // Digital Pins
-int mixerIN1Pin = 0;
-int bloodPumpIN2Pin = 1;
+int mixerIN1Pin = 4;
+int bloodPumpIN2Pin = 5;
 int bloodPumpPWMPin = 6;
 int dialPumpIN1Pin = 7;
 int dialPumpIN2Pin = 8;
 int dialClampActivePin = 9;
 int venClampActivePin = 10;
 int mixerIN2Pin = 11;
+int reverseOsmosisIN1Pin = 12;
+int reverseOsmosisIN2Pin = 13;
 
 // From Master
 volatile bool bypassValveCMD = false;
@@ -115,6 +118,8 @@ void setup() {
   pinMode(dialClampActivePin, OUTPUT);
   pinMode(venClampActivePin, OUTPUT);
   pinMode(mixerIN2Pin, OUTPUT);
+  pinMode(reverseOsmosisIN2Pin, OUTPUT);
+  pinMode(reverseOsmosisIN1Pin, OUTPUT);
   Serial.begin(9600);
 }
 
@@ -124,6 +129,7 @@ void setup() {
 
 void loop() {
 
+  // Serial Data Entry
   const String sesDurStr = "Duration (min): ";
   const String desFluidStr = "Fluid Removal (L): ";
   const String weightStr = "Patient weight (kg): ";
@@ -166,6 +172,7 @@ void loop() {
     Serial.println(F(" mL/h/kg"));
   }
 
+  // User re-enter values if calculated UF Rate too high (unsafe)
   if ((UFRate / FLOAT_SCALE) > 13) {
     Serial.println(F("UF Rate too high"));
     hepFlag = false;
@@ -180,6 +187,8 @@ void loop() {
 
   slave1SerialData = (runTimeMin > 0) && (desiredFluidRemoval > 0) && (patientWeight > 0) && (UFRate > 0);
 
+  // Commence main loop
+  // Start command from master: toggled once valid serial data received and start button pressed
   while (startCommand) {
 
     // Read Analogue Inputs
@@ -189,18 +198,17 @@ void loop() {
     bloodFlowVal = analogRead(bloodFlowPin);
 
     // Scale Analogue Inputs for Transmission to Master
-    // ** TO DO **: Verify analogue operating values
     dialConductivityScl = map(dialConductivityVal, 0, 1023, 10 * FLOAT_SCALE, 30 * FLOAT_SCALE);
     pHScl = map(pHVal, 0, 1023, 0 * FLOAT_SCALE, 14 * FLOAT_SCALE);
     dialTempScl = map(dialTempVal, 20, 358, 25 * FLOAT_SCALE, 60 * FLOAT_SCALE); // Should be 358 Tinkercad issue
-    bloodFlowScl = map(bloodFlowVal, 0, 1023, 30 * FLOAT_SCALE, 600 * FLOAT_SCALE);
+    bloodFlowScl = scaleInput(bloodFlowVal, 0, 1023, 30, 600);
 
     // Mixer runs at a fixed speed continuously
     digitalWrite(mixerIN1Pin, HIGH);
     digitalWrite(mixerIN2Pin, LOW);
     mixerRunningFB = true;
 
-    // Dialysate pump as long as no level alarm
+    // Dialysate pump runs as long as no level alarm from Master
     if (dialPumpCMD) {
       digitalWrite(dialPumpIN1Pin, HIGH);
       digitalWrite(dialPumpIN2Pin, LOW);
@@ -212,6 +220,10 @@ void loop() {
       dialPumpRunningFB = false;
     }
 
+    // Reverse Osmosis runs at a fixed speed continously
+    digitalWrite(reverseOsmosisIN1Pin, HIGH);
+    digitalWrite(reverseOsmosisIN2Pin, HIGH);
+    reverseOsmosisRunningFB = true;
 
     // Blood pump PID controlled
     int dir = (int) !bloodPumpFault;
@@ -250,6 +262,9 @@ void loop() {
   digitalWrite(mixerIN2Pin, LOW);
   digitalWrite(dialPumpIN1Pin, LOW);
   digitalWrite(dialPumpIN2Pin, LOW);
+  digitalWrite(reverseOsmosisIN1Pin, LOW);
+  digitalWrite(reverseOsmosisIN2Pin, LOW);
+  reverseOsmosisRunningFB = false;
   setMotor(0, 0, bloodPumpPWMPin, bloodPumpIN2Pin);
   venousClamp.write(CLAMP_ANGLE); // clamp lines if not running as a safety precaution
   bypassValve.write(CLAMP_ANGLE); // divert to waste if machine not running
@@ -258,6 +273,7 @@ void loop() {
   bloodPumpRunningFB = false;
   dialPumpRunningFB = false;
   mixerRunningFB = false;
+  reverseOsmosisRunningFB = false;
 }
 
 // ---------- //
@@ -282,6 +298,7 @@ void IOSend() {
     I2C_writeAnything(bloodPumpRunningFB);
     I2C_writeAnything(dialPumpRunningFB);
     I2C_writeAnything(mixerRunningFB);
+    // I2C_writeAnything(reverseOsmosisRunningFB); // Not transmitted as not displayed on serial monitor due to a size limit
   }
 }
 

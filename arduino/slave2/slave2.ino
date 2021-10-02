@@ -44,8 +44,8 @@ long bloodLeakValScl = 0;
 long dialLevelValScl = 0;
 
 // Digital Pins
-int wastePumpIN1Pin = 0;
-int wastePumpIN2Pin = 1;
+int wastePumpENPin = 11;
+int wastePumpIN2Pin = 12;
 int heparinPumpIN1Pin = 6;
 int heparinPumpIN2Pin = 7;
 int deaeratorIN1Pin = 8;
@@ -64,6 +64,8 @@ bool startCommand = false; // From Master
 int temp_PWM = 0;
 volatile bool wastePumpRun = false;
 volatile double hepRunTimeRemaining = 0;
+volatile int UFRate = 0;
+int UFRateScl = 0;
 
 // ----------- //
 // SETUP LOOP  //
@@ -72,6 +74,14 @@ void setup() {
   Wire.begin(0x11); // join I2C bus as slave with address 0x11
   Wire.onRequest(IOSend);
   Wire.onReceive(MasterControl);
+  pinMode(wastePumpENPin, OUTPUT);
+  pinMode(wastePumpIN2Pin, OUTPUT);
+  pinMode(heparinPumpIN2Pin, OUTPUT);
+  pinMode(heparinPumpIN1Pin, OUTPUT);
+  pinMode(deaeratorIN1Pin, OUTPUT);
+  pinMode(heaterPWMPin, OUTPUT);
+  pinMode(heaterIN2Pin, OUTPUT);
+  pinMode(deaeratorIN2Pin, OUTPUT);
 }
 
 // ---------- //
@@ -87,30 +97,31 @@ void loop() {
     dialLevelVal = analogRead(dialLevelPin);
 
     // Scale Analogue Inputs for Transmission to Master
-    // ** TO DO **: Verify operating scaled values
-    waterLevelValScl = map(waterLevelVal, 0, 1023, 0, 100*FLOAT_SCALE);
-    venTempValScl = scaleInput(venTempVal, 20, 358, 26, 60); 
-    bloodLeakValScl = bloodLeakVal*FLOAT_SCALE; // checking against arbitrary threshold found experimentally
+    waterLevelValScl = map(waterLevelVal, 0, 1023, 0, 100 * FLOAT_SCALE);
+    venTempValScl = scaleInput(venTempVal, 20, 358, 26, 60);
+    bloodLeakValScl = bloodLeakVal * FLOAT_SCALE; // checking against arbitrary threshold found experimentally
     dialLevelValScl = scaleInput(dialLevelVal, 0, 466, 0, 100);
- 
+
     // Heater PID controlled
     //    heaterRunningFB = setMotor(1, temp_PWM, temp_PWM_Pin, heaterIN1Pin, heaterIN2Pin); // temp_PWM_Pin to be defined
 
-    // Waste Pumps run continuously at a fixed speed unless faulted by high pressure on the waste line
+    UFRateScl = map(UFRate, 0, 13, 0, 255);
+
+    // Waste Pump (UF Pump) runs at the speed to maintain the required pressure for ultrafiltration
     if (wastePumpRun) { // command from master
-      digitalWrite(wastePumpIN1Pin, HIGH);
+      analogWrite(wastePumpENPin, UFRateScl);
+      digitalWrite(wastePumpIN2Pin, HIGH);
+      wastePumpRunningFB = true;
+    } else {
+      digitalWrite(wastePumpENPin, LOW);
       digitalWrite(wastePumpIN2Pin, LOW);
       wastePumpRunningFB = false;
-    } else {
-      digitalWrite(wastePumpIN1Pin, LOW);
-      digitalWrite(wastePumpIN2Pin, LOW);
     }
 
     if (hepRunTimeRemaining > 0) {
       digitalWrite(heparinPumpIN1Pin, HIGH);
       digitalWrite(heparinPumpIN2Pin, LOW);
-      
-  heparinPumpRunningFB = true;
+      heparinPumpRunningFB = true;
     } else {
       digitalWrite(heparinPumpIN1Pin, LOW);
       digitalWrite(heparinPumpIN2Pin, LOW);
@@ -123,14 +134,14 @@ void loop() {
   }
 
   // Stop all motors
-  digitalWrite(wastePumpIN1Pin, LOW);
+  digitalWrite(wastePumpENPin, LOW);
   digitalWrite(wastePumpIN2Pin, LOW);
   digitalWrite(heparinPumpIN1Pin, LOW);
   digitalWrite(heparinPumpIN2Pin, LOW);
   digitalWrite(deaeratorIN1Pin, LOW);
   digitalWrite(deaeratorIN2Pin, LOW);
   setMotor(0, 0, heaterPWMPin, heaterIN2Pin);
-  
+
   heaterRunningFB = false;
   wastePumpRunningFB = false;
   deaeratorRunningFB = false;
@@ -156,7 +167,9 @@ void MasterControl(int dataSize) {
   I2C_readAnything(startCommand);
   I2C_readAnything(temp_PWM);
   I2C_readAnything(wastePumpRun);
+  wastePumpRun = !wastePumpRun; // Invert polarity
   I2C_readAnything(hepRunTimeRemaining);
+  I2C_readAnything(UFRate);
 }
 
 // Scale Analogue Input  //
@@ -167,23 +180,23 @@ void MasterControl(int dataSize) {
 // x is the value to scale
 // y is the scaled value
 long scaleInput(long rawValue, long rawMin, long rawMax, long scaledMin, long scaledMax) {
-  return ((FLOAT_SCALE*(scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + FLOAT_SCALE*scaledMin);
+  return ((FLOAT_SCALE * (scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + FLOAT_SCALE * scaledMin);
 }
 
 // pin "in2" permanently wired to LOW
-bool setMotor(int dir, int pwmVal, int pwm, int in1){
-  analogWrite(pwm,pwmVal);
-  if(dir == 1){
-    digitalWrite(in1,HIGH);
+bool setMotor(int dir, int pwmVal, int pwm, int in1) {
+  analogWrite(pwm, pwmVal);
+  if (dir == 1) {
+    digitalWrite(in1, HIGH);
     //digitalWrite(in2,LOW);
   }
   /*else if(dir == -1){
     digitalWrite(in1,LOW);
     //digitalWrite(in2,HIGH);
-  }*/
-  else{
-    digitalWrite(in1,LOW);
+    }*/
+  else {
+    digitalWrite(in1, LOW);
     //digitalWrite(in2,LOW);
-  }  
-   return (pwm > 0 && dir==1);
+  }
+  return (pwm > 0 && dir == 1);
 }
