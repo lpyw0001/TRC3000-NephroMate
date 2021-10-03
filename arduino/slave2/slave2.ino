@@ -44,12 +44,14 @@ long bloodLeakValScl = 0;
 long dialLevelValScl = 0;
 
 // Digital Pins
+int heaterEncA = 2;
+int heaterEncB = 3;
 int wastePumpENPin = 11;
 int wastePumpIN2Pin = 12;
 int heparinPumpIN1Pin = 6;
 int heparinPumpIN2Pin = 7;
 int deaeratorIN1Pin = 8;
-int heaterPWMPin = 9;
+int heaterIN1Pin = 9;
 int heaterIN2Pin = 10;
 int deaeratorIN2Pin = 13;
 
@@ -57,15 +59,18 @@ volatile bool heaterRunningFB = false;
 bool wastePumpRunningFB = false;
 bool deaeratorRunningFB = false;
 bool heparinPumpRunningFB = false;
+bool serialInputFlag = false;
 
 // Output Objects
 // include: waste pump, heparin pump, deaerator, heater
 bool startCommand = false; // From Master
-int temp_PWM = 0;
+int tempPWM = 0;
 volatile bool wastePumpRun = false;
 volatile double hepRunTimeRemaining = 0;
 volatile int UFRate = 0;
 int UFRateScl = 0;
+volatile int motorPosition = 0;
+volatile long dialTemp = 0;
 
 // ----------- //
 // SETUP LOOP  //
@@ -74,14 +79,18 @@ void setup() {
   Wire.begin(0x11); // join I2C bus as slave with address 0x11
   Wire.onRequest(IOSend);
   Wire.onReceive(MasterControl);
+  pinMode(heaterEncA, INPUT);
+  attachInterrupt(digitalPinToInterrupt(heaterEncA), readEnc, RISING);
+  pinMode(heaterEncB, INPUT);
   pinMode(wastePumpENPin, OUTPUT);
   pinMode(wastePumpIN2Pin, OUTPUT);
   pinMode(heparinPumpIN2Pin, OUTPUT);
   pinMode(heparinPumpIN1Pin, OUTPUT);
   pinMode(deaeratorIN1Pin, OUTPUT);
-  pinMode(heaterPWMPin, OUTPUT);
+  pinMode(heaterIN1Pin, OUTPUT);
   pinMode(heaterIN2Pin, OUTPUT);
   pinMode(deaeratorIN2Pin, OUTPUT);
+  Serial.begin(19200);
 }
 
 // ---------- //
@@ -89,7 +98,14 @@ void setup() {
 // ---------- //
 
 void loop() {
+
+  if (!serialInputFlag) {
+    Serial.println(F("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")); //'Clear' serial monitor output
+    serialInputFlag = true;
+  }
+
   while (startCommand) {
+    
     // Read Analogue Inputs
     waterLevelVal = analogRead(waterLevelPin);
     venTempVal = analogRead(venTempPin);
@@ -103,8 +119,12 @@ void loop() {
     dialLevelValScl = scaleInput(dialLevelVal, 0, 466, 0, 100);
 
     // Heater PID controlled
-    //    heaterRunningFB = setMotor(1, temp_PWM, temp_PWM_Pin, heaterIN1Pin, heaterIN2Pin); // temp_PWM_Pin to be defined
+    heaterRunningFB = setMotor(1, tempPWM, heaterIN1Pin, heaterIN2Pin);
+    Serial.print(tempPWM);
+    Serial.print("\t");
+    Serial.println(dialTemp / FLOAT_SCALE);
 
+    // Scale UF Rate Calculate for Pump Speed (achieve required pressure)
     UFRateScl = map(UFRate, 0, 13, 0, 255);
 
     // Waste Pump (UF Pump) runs at the speed to maintain the required pressure for ultrafiltration
@@ -140,7 +160,7 @@ void loop() {
   digitalWrite(heparinPumpIN2Pin, LOW);
   digitalWrite(deaeratorIN1Pin, LOW);
   digitalWrite(deaeratorIN2Pin, LOW);
-  setMotor(0, 0, heaterPWMPin, heaterIN2Pin);
+  setMotor(0, 0, heaterIN1Pin, heaterIN2Pin);
 
   heaterRunningFB = false;
   wastePumpRunningFB = false;
@@ -165,11 +185,12 @@ void IOSend() {
 
 void MasterControl(int dataSize) {
   I2C_readAnything(startCommand);
-  I2C_readAnything(temp_PWM);
+  I2C_readAnything(tempPWM);
   I2C_readAnything(wastePumpRun);
   wastePumpRun = !wastePumpRun; // Invert polarity
   I2C_readAnything(hepRunTimeRemaining);
   I2C_readAnything(UFRate);
+  I2C_readAnything(dialTemp);
 }
 
 // Scale Analogue Input  //
@@ -183,20 +204,33 @@ long scaleInput(long rawValue, long rawMin, long rawMax, long scaledMin, long sc
   return ((FLOAT_SCALE * (scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + FLOAT_SCALE * scaledMin);
 }
 
-// pin "in2" permanently wired to LOW
-bool setMotor(int dir, int pwmVal, int pwm, int in1) {
-  analogWrite(pwm, pwmVal);
+
+// Enable pin is always wired HIGH
+bool setMotor(int dir, int pwmVal, int in1, int in2) {
+
   if (dir == 1) {
-    digitalWrite(in1, HIGH);
-    //digitalWrite(in2,LOW);
+    analogWrite(in1, pwmVal);
+    digitalWrite(in2, LOW);
   }
-  /*else if(dir == -1){
-    digitalWrite(in1,LOW);
-    //digitalWrite(in2,HIGH);
-    }*/
+  else if (dir == -1) {
+    analogWrite(in2, pwmVal);
+    digitalWrite(in1, LOW);
+  }
   else {
     digitalWrite(in1, LOW);
-    //digitalWrite(in2,LOW);
+    digitalWrite(in2, LOW);
   }
-  return (pwm > 0 && dir == 1);
+
+  return (pwmVal > 0);
+}
+
+// Read Motor Encoders
+void readEnc() {
+  int encB = digitalRead(heaterEncB);
+  if (encB > 0) {
+    motorPosition++;
+  }
+  else {
+    motorPosition--;
+  }
 }

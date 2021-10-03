@@ -74,8 +74,8 @@ bool deaeratorRunningFB_S2 = false;
 bool heparinPumpRunningFB_S2 = false;
 
 // Alarm Limits (note multiplied by FLOAT_SCALE)
-const int PRESSURE_HIGH = 15000; // TO DO update value
-const int PRESSURE_LOW = -23000; // TO DO update value
+const int PRESSURE_HIGH = 15000;
+const int PRESSURE_LOW = -23000;
 const int LEVEL_LOW = 1000;
 const int TEMP_LOW = 3600;
 const int TEMP_HIGH = 4200;
@@ -83,10 +83,10 @@ const int CONDUCTIVITY_LOW = 1200;
 const int CONDUCTIVITY_HIGH = 1600;
 const int PH_LOW = 680;
 const int PH_HIGH = 760;
-const int AIR_DETECT = 2000; // TO DO update value
+const int AIR_DETECT = 2000;
 const long FLOW_HIGH = 50000;
 const long FLOW_LOW = 20000;
-const int BLOOD_LEAK = 1000; // TO DO update value
+const int BLOOD_LEAK = 1000;
 
 // PID Constants & variables
 int TARGET_TEMP = 37; // target temperature (degrees Celsius) for dialysate solution
@@ -133,10 +133,10 @@ LiquidCrystal lcd(12, 11, 6, 7, 4, 5); // (rs,enable,d4,d5,d6,d7)
 unsigned long currentTime = 0;
 unsigned long prevTime = 0;
 long runTimeRemaining = 0;
-unsigned int cyclePeriod = 80; // time in ms to alternate the screen values (note 40 in tinkercad =/= 40 real time)
-volatile int runTimeMin = 10; // time in ms to perform hemodialysis (refer comment above) (4000)
+unsigned int cyclePeriod = 80; // time in ms to alternate the screen values (note 80 in tinkercad =/= 80 real time)
+volatile int runTimeMin = 10; // time in ms to perform hemodialysis (refer comment above) (user input)
 unsigned long runTimeMs = 10;
-volatile int hepRunTime = 10; // Duration to run Heparin infusion (200)
+volatile int hepRunTime = 10; // Duration to run Heparin infusion (user input)
 unsigned long hepRunTimeMs = 10;
 long hepRunTimeRemaining = 0;
 int cycle = 0; // alternate values displayed on LCD screen and in serial monitor
@@ -149,9 +149,9 @@ bool serialInputFlag = false;
 bool slave1SerialData = false;
 
 // Other Process Control
-volatile int desiredFluidRemoval=0;
-volatile int UFRate=0;
-volatile int patientWeight=0;
+volatile int desiredFluidRemoval = 0;
+volatile int UFRate = 0;
+volatile int patientWeight = 0;
 bool bypassValveCMDPrev = false;
 bool bypassValveCMD = false;
 bool UFFlag = false;
@@ -170,7 +170,7 @@ void setup() {
   pinMode(airDetectTXPin, OUTPUT);
   pinMode(airDetectRXPin, INPUT);
   lcd.begin(16, 2);
-  Serial.begin(9600);
+  Serial.begin(19200);
 }
 
 // ---------- //
@@ -287,8 +287,8 @@ void loop() {
       I2C_readAnything(heparinPumpRunningFB_S2);
 
       // Check Alarm Conditions
-      artPressureAlarm = (artPressVal > PRESSURE_HIGH || artPressVal < PRESSURE_LOW);
-      venPressAlarm = (venPressVal > PRESSURE_HIGH || venPressVal < PRESSURE_LOW);
+      artPressureAlarm = (artPressVal < PRESSURE_LOW);
+      venPressAlarm = (venPressVal > PRESSURE_HIGH);
       airDetectAlarm = airDetectValue > AIR_DETECT;
       dialConductivityAlarm = dialConductivityVal_S1 > CONDUCTIVITY_HIGH || dialConductivityVal_S1 < CONDUCTIVITY_LOW;
       pHAlarm = pHVal_S1 > PH_HIGH || pHVal_S1 < PH_LOW;
@@ -302,7 +302,7 @@ void loop() {
 
       anyAlarmTriggered = artPressureAlarm || venPressAlarm || airDetectAlarm || dialConductivityAlarm || pHAlarm || dialTempAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm || bloodLeakAlarm || dialLevelAlarm;
       dialAlarm =  dialConductivityAlarm || pHAlarm || dialTempAlarm ||  dialLevelAlarm;
-      
+
       // Check Device Fault Conditions
       bloodPumpFault = airDetectAlarm || venPressAlarm || artPressureAlarm || bloodFlowAlarm || waterLevelAlarm || venTempAlarm;
       bypassValveCMD = pHAlarm || dialConductivityAlarm || dialTempAlarm || dialLevelAlarm;
@@ -329,6 +329,7 @@ void loop() {
 
       // Update Display
       currentTime = millis();
+      //currentTime += 1501; // Use this to 'speed up' the simulation
       runTimeRemaining = (runTimeMs > currentTime) ? (runTimeMs - currentTime) / 100 : 0; // arbitrary scaling to return a reasonable value
       hepRunTimeRemaining = (hepRunTimeMs > currentTime) ? (hepRunTimeMs - currentTime) / 100 : 0;
 
@@ -340,8 +341,8 @@ void loop() {
       // PID Control
       double dt = ((double)(currentTime - prevT)) / (1.0e3); // convert from ms to s
       prevT = currentTime;
-      temp_PWM = PIDcontrol(TARGET_TEMP, dialTempVal_S1, dt, kp_temp, ki_temp, kd_temp, eprev_temp, eintegral_temp);
-      flow_PWM = PIDcontrol(TARGET_FLOW, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, eprev_flow, eintegral_flow);
+      temp_PWM = PIDcontrol(TARGET_TEMP * FLOAT_SCALE, dialTempVal_S1, dt, kp_temp, ki_temp, kd_temp, eprev_temp, eintegral_temp, false);
+      flow_PWM = PIDcontrol(TARGET_FLOW * FLOAT_SCALE, bloodFlowVal_S1, dt, kp_flow, ki_flow, kd_flow, eprev_flow, eintegral_flow, false);
       int temp_PWMPrev;
       int flow_PWMPrev;
 
@@ -352,6 +353,7 @@ void loop() {
       I2C_writeAnything(wastePressureAlarm);
       I2C_writeAnything(hepRunTimeRemaining);
       I2C_writeAnything(UFRate);
+      I2C_writeAnything(dialTempVal_S1);
       Wire.endTransmission();
 
       // Send fault conditions to slave devices if any values have changed
@@ -375,9 +377,9 @@ void loop() {
       temp_PWMPrev = temp_PWM;
       flow_PWMPrev = flow_PWM;
       bypassValveCMDPrev = bypassValveCMD;
-
     }
-    if (currentTime > runTimeMs && !finished) {
+    
+    if (currentTime >= runTimeMs && !finished) {
       Serial.println(F("\nDialysis complete\n"));
       displayUpdateString("Haemodialysis", "Complete", 1);
       finished = true;
@@ -538,15 +540,21 @@ String motorState(bool state) {
   return (state) ? "Running" : "Off";
 }
 
-int PIDcontrol(int target, int val, int dt, int kp, int ki, int kd, int & eprev, int & eintegral) {
+int PIDcontrol(long target, long val, int dt, int kp, int ki, int kd, int & eprev, int & eintegral, bool simMode) {
   int e = target - val;
   int de_dt = (e - eprev) / dt;
   eintegral = eintegral + e * dt;
   eprev = e;
   int u = (int) kp * e + ki * eintegral + kd * de_dt;
+
+  if (simMode) {
+    u /= 10; // Reduced response for visualisation
+  }
+
   if (u < 0) return 0; // set minimum pump PWM to be zero
   if (u > 0) return min(abs(u), 255); // maximum PWM value is 255
 }
+
 void state0() {
   Serial.println(F("\n**** RUNTIME ****"));
   printAnalogue("Session time rem", runTimeRemaining, "min");
@@ -594,7 +602,7 @@ void state8() {
 }
 
 void state9() {
-  printAnalogueStatus("UF Pump", map(UFRate,0,13,0,100), "%", motorState(wastePumpRunningFB_S2), false);
+  printAnalogueStatus("UF Pump", map(UFRate, 0, 13, 0, 100), "%", motorState(wastePumpRunningFB_S2), false);
   printAnalogueStatus("Heater", (heaterRunningFB_S2 * 100), "%", motorState(heaterRunningFB_S2), false);
   printAnalogueStatus("Dial Pump", (dialPumpRunningFB_S1 * 100), "%", motorState(dialPumpRunningFB_S1), false);
 }

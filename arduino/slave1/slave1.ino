@@ -43,7 +43,7 @@ long dialTempScl = 0;
 long bloodFlowScl = 0;
 
 // Fault Conditions
-bool bloodPumpFault = false;
+bool bloodPumpFault = true;
 bool clampLines = false;
 
 bool venousClampFB = false;
@@ -65,12 +65,15 @@ Servo venousClamp;
 const int CLAMP_ANGLE = 0;
 const int CLAMP_OFF = 90;
 bool startCommand = false; // From Master
-int flow_PWM = 0;
+int flowPWM = 0;
+volatile int motorPosition = 0;
 
 // Digital Pins
+int bloodPumpEncA = 2;
+int bloodPumpEncB = 3;
 int mixerIN1Pin = 4;
-int bloodPumpIN2Pin = 5;
-int bloodPumpPWMPin = 6;
+int bloodPumpIN1Pin = 5;
+int bloodPumpIN2Pin = 6;
 int dialPumpIN1Pin = 7;
 int dialPumpIN2Pin = 8;
 int dialClampActivePin = 9;
@@ -110,9 +113,12 @@ void setup() {
   venousClamp.attach(10);
   venousClamp.write(CLAMP_ANGLE);
   Wire.onReceive(MasterControl);
+  pinMode(bloodPumpEncA, INPUT);
+  attachInterrupt(digitalPinToInterrupt(bloodPumpEncA), readEnc, RISING);
+  pinMode(bloodPumpEncB, INPUT);
   pinMode(mixerIN1Pin, OUTPUT);
+  pinMode(bloodPumpIN1Pin, OUTPUT);
   pinMode(bloodPumpIN2Pin, OUTPUT);
-  pinMode(bloodPumpPWMPin, OUTPUT);
   pinMode(dialPumpIN1Pin, OUTPUT);
   pinMode(dialPumpIN2Pin, OUTPUT);
   pinMode(dialClampActivePin, OUTPUT);
@@ -162,7 +168,7 @@ void loop() {
   }
 
   UFRateCalc = FLOAT_SCALE * ((FLOAT_SCALE * desiredFluidRemovalCalc) / (FLOAT_SCALE * runTimeMin / 60)) / (FLOAT_SCALE * patientWeight);
-  UFRate = (int)(FLOAT_SCALE * UFRateCalc);
+  UFRate = (int)abs((FLOAT_SCALE * UFRateCalc));
 
   if (!UFFlag && UFRate != 0) {
     Serial.print(F("UF Rate: "));
@@ -174,7 +180,7 @@ void loop() {
 
   // User re-enter values if calculated UF Rate too high (unsafe)
   if ((UFRate / FLOAT_SCALE) > 13) {
-    Serial.println(F("UF Rate too high"));
+    Serial.println(F("UF Rate too high."));
     hepFlag = false;
     weightFlag = false;
     fluidFlag = false;
@@ -190,7 +196,6 @@ void loop() {
   // Commence main loop
   // Start command from master: toggled once valid serial data received and start button pressed
   while (startCommand) {
-
     // Read Analogue Inputs
     dialConductivityVal = analogRead(dialConductivityPin);
     pHVal = analogRead(pHPin);
@@ -200,8 +205,9 @@ void loop() {
     // Scale Analogue Inputs for Transmission to Master
     dialConductivityScl = map(dialConductivityVal, 0, 1023, 10 * FLOAT_SCALE, 30 * FLOAT_SCALE);
     pHScl = map(pHVal, 0, 1023, 0 * FLOAT_SCALE, 14 * FLOAT_SCALE);
-    dialTempScl = map(dialTempVal, 20, 358, 25 * FLOAT_SCALE, 60 * FLOAT_SCALE); // Should be 358 Tinkercad issue
+    dialTempScl = map(dialTempVal, 20, 358, 25 * FLOAT_SCALE, 60 * FLOAT_SCALE);
     bloodFlowScl = scaleInput(bloodFlowVal, 0, 1023, 30, 600);
+    //bloodFlowScl = scaleInput(bloodFlowVal, 0, 1023, 175, 275); // Temp for PID Demo
 
     // Mixer runs at a fixed speed continuously
     digitalWrite(mixerIN1Pin, HIGH);
@@ -220,24 +226,22 @@ void loop() {
       dialPumpRunningFB = false;
     }
 
-    // Reverse Osmosis runs at a fixed speed continously
+    // Reverse Osmosis unit runs at a fixed speed continously
     digitalWrite(reverseOsmosisIN1Pin, HIGH);
     digitalWrite(reverseOsmosisIN2Pin, HIGH);
     reverseOsmosisRunningFB = true;
 
     // Blood pump PID controlled
-    int dir = (int) !bloodPumpFault;
-    bloodPumpRunningFB = setMotor(dir, flow_PWM, bloodPumpPWMPin, bloodPumpIN2Pin); // flow_PWM_Pin to be defined
-    // Currently just start/stop based on fault conditions
-    /*if (bloodPumpFault) {
-      digitalWrite(bloodPumpIN1Pin, LOW);
-      digitalWrite(bloodPumpIN2Pin, LOW);
-      bloodPumpRunningFB = false;
-      } else {
-      digitalWrite(bloodPumpIN1Pin, HIGH);
-      digitalWrite(bloodPumpIN2Pin, LOW);
-      bloodPumpRunningFB = true;
-      }*/
+    //int dir = (int) !bloodPumpFault;
+    int bloodPumpDir = 0;
+    if (!bloodPumpFault) {
+      bloodPumpDir = 1;
+    }
+
+    Serial.print(flowPWM);
+    Serial.print("\t");
+    Serial.println(bloodFlowScl / FLOAT_SCALE);
+    bloodPumpRunningFB = setMotor(bloodPumpDir, flowPWM, bloodPumpIN1Pin, bloodPumpIN2Pin);
 
     // Bypass Valve (command received from master)
     // Diverts dialysate to waste when temperature, conductivity or pH alarm triggered
@@ -256,7 +260,6 @@ void loop() {
     venousClampFB = false;
   }
 
-
   // Stop all motors
   digitalWrite(mixerIN1Pin, LOW);
   digitalWrite(mixerIN2Pin, LOW);
@@ -265,7 +268,7 @@ void loop() {
   digitalWrite(reverseOsmosisIN1Pin, LOW);
   digitalWrite(reverseOsmosisIN2Pin, LOW);
   reverseOsmosisRunningFB = false;
-  setMotor(0, 0, bloodPumpPWMPin, bloodPumpIN2Pin);
+  bloodPumpRunningFB = setMotor(0, 0, bloodPumpIN1Pin, bloodPumpIN2Pin);
   venousClamp.write(CLAMP_ANGLE); // clamp lines if not running as a safety precaution
   bypassValve.write(CLAMP_ANGLE); // divert to waste if machine not running
   venousClampFB = true;
@@ -306,7 +309,7 @@ void MasterControl(int dataSize) {
   I2C_readAnything(startCommand);
   I2C_readAnything(bloodPumpFault);
   I2C_readAnything(clampLines);
-  I2C_readAnything(flow_PWM);
+  I2C_readAnything(flowPWM);
   I2C_readAnything(bypassValveCMD);
   I2C_readAnything(dialPumpCMD);
   dialPumpCMD = !dialPumpCMD; // Invert polarity
@@ -322,24 +325,34 @@ long scaleInput(long rawValue, long rawMin, long rawMax, long scaledMin, long sc
   return ((FLOAT_SCALE * (scaledMax - scaledMin) / (rawMax - rawMin)) * (rawValue - rawMin) + FLOAT_SCALE * scaledMin);
 }
 
-// set PWM of motor
-// pin in2 permanently wired to LOW
-bool setMotor(int dir, int pwmVal, int pwm, int in1) {
-  analogWrite(pwm, pwmVal);
-  if (dir == 1) {
-    digitalWrite(in1, HIGH);
-    //digitalWrite(in2,LOW);
+// Read Motor Encoders
+void readEnc() {
+  int encB = digitalRead(bloodPumpEncB);
+  if (encB > 0) {
+    motorPosition++;
   }
-  /*else if(dir == -1){
-    digitalWrite(in1,LOW);
-    //digitalWrite(in2,HIGH);
-    }*/
+  else {
+    motorPosition--;
+  }
+}
+
+// Enable pin is always wired HIGH
+bool setMotor(int dir, int pwmVal, int in1, int in2) {
+
+  if (dir == 1) {
+    analogWrite(in1, pwmVal);
+    digitalWrite(in2, LOW);
+  }
+  else if (dir == -1) {
+    analogWrite(in2, pwmVal);
+    digitalWrite(in1, LOW);
+  }
   else {
     digitalWrite(in1, LOW);
-    //digitalWrite(in2,LOW);
+    digitalWrite(in2, LOW);
   }
 
-  return (pwm > 0 && dir == 1);
+  return (pwmVal > 0);
 }
 
 long SerialDataEntry(const String &guide, int minValue) {
