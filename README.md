@@ -49,7 +49,7 @@ When an emergency stop is triggered, all devices stop running, the servo's actua
 
 Once entered the machine calculates the ultrafiltration rate (UFR) and if this rate is unsafe will prompt the user to re-enter values until a safe rate is calculated. All analogue values are to be read and scaled on their attached microcontroller and the scaled value relayed to the master for process control. The master will print these values to the serial monitor. The current run-state of the machine can be viewed on the LCD panel. When an alarm is triggered, there will be both an audible and visual indicator.
 
-**Blood Circuit**
+**Blood Circuit**  
 The heparin pump, if required, will run for the user input duration, at a fixed speed. The venous clamps will be actuated when an emergency stop is triggered, either by user input or air detection. The blood pump speed is controller via a PID loop to maintain an appropriate flow rate on the inflow line. The blood pump will stop when a fault condition is triggered, which includes the following:
 * Emergency stop
 * Arterial pressure alarm
@@ -59,7 +59,7 @@ The heparin pump, if required, will run for the user input duration, at a fixed 
 * Venous temperature alarm
 * Blood leak detected
 
-**Dialysate Circuit**
+**Dialysate Circuit**  
 The bypass valve actuates to divert dialysate to waste when any of the following fault conditions occur:
 * Emergency stop
 * Dialysate conductivity alarm
@@ -69,7 +69,7 @@ The bypass valve actuates to divert dialysate to waste when any of the following
 
 The dialysate pump runs at a fixed speed continuously unless a dialysate fault condition occurs, which is any of the five listed above. The mixer, deaerator and reverse osmosis machine run continuously. The heater is controlled by a PID loop to maintain appropriate dialysate temperature. 
 
-**Waste Circuit**
+**Waste Circuit**  
 The ultrafiltration pump runs at the speed calculated to maintain the required pressure for the desired fluid removal. The waste pump will stop when any of the following fault conditions are triggered:
 * Emergency stop
 * Waste pressure alarm
